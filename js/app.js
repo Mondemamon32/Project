@@ -3,8 +3,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // ==========================================
     // 🚀 INITIALIZE SUPABASE
     // ==========================================
-    const SUPABASE_URL = 'YOUR_SUPABASE_URL_HERE'; // <-- PASTE YOUR URL
-    const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY_HERE'; // <-- PASTE YOUR KEY
+    const SUPABASE_URL = 'https://pselhaneizlyxrjlwrdi.supabase.co'; // <-- PASTE YOUR URL
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBzZWxoYW5laXpseXhyamx3cmRpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzMDIzMzQsImV4cCI6MjA5MDg3ODMzNH0.fY09eWmTfVDboPXWVhyMTxk4PbREAafognPfDjybsMA'; // <-- PASTE YOUR KEY
     
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
