@@ -8,11 +8,13 @@ document.addEventListener("DOMContentLoaded", () => {
     
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // --- 1. AUTH LOGIC ---
+    // --- 1. LOGIN / REGISTER LOGIC (NOW USING SUPABASE AUTH) ---
     const loginForm = document.getElementById("loginForm");
     const registerForm = document.getElementById("registerForm");
 
     if (loginForm && registerForm) {
+        
+        // Toggle between Login and Register views
         document.getElementById("showRegister").addEventListener("click", (e) => {
             e.preventDefault();
             loginForm.classList.add("d-none");
@@ -25,20 +27,25 @@ document.addEventListener("DOMContentLoaded", () => {
             loginForm.classList.remove("d-none");
         });
 
+        // Handle REAL Registration
         registerForm.addEventListener("submit", async (e) => {
             e.preventDefault();
             const email = document.getElementById("regEmail").value;
             const password = document.getElementById("regPassword").value;
             const fullName = document.getElementById("regName").value;
-            const regBtn = document.getElementById("regBtn");
             
+            const regBtn = document.getElementById("regBtn");
             regBtn.disabled = true;
             regBtn.innerText = "Creating account...";
 
-            const { error } = await supabase.auth.signUp({
+            const { data, error } = await supabase.auth.signUp({
                 email: email,
                 password: password,
-                options: { data: { full_name: fullName } }
+                options: {
+                    data: {
+                        full_name: fullName,
+                    }
+                }
             });
 
             if (error) {
@@ -46,21 +53,25 @@ document.addEventListener("DOMContentLoaded", () => {
                 regBtn.disabled = false;
                 regBtn.innerText = "Register";
             } else {
-                alert("Account created! Check your email for verification if required.");
+                alert("Account created successfully!");
                 window.location.href = "dashboard.html";
             }
         });
 
+        // Handle REAL Login
         loginForm.addEventListener("submit", async (e) => {
             e.preventDefault();
             const email = document.getElementById("loginEmail").value;
             const password = document.getElementById("loginPassword").value;
-            const loginBtn = document.getElementById("loginBtn");
             
+            const loginBtn = document.getElementById("loginBtn");
             loginBtn.disabled = true;
             loginBtn.innerText = "Signing in...";
 
-            const { error } = await supabase.auth.signInWithPassword({ email, password });
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email: email,
+                password: password,
+            });
 
             if (error) {
                 alert("Login failed: " + error.message);
@@ -72,212 +83,360 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // --- 2. TASK & COURSE MANAGER (DATABASE INTEGRATED) ---
+    // --- 2. TASK MANAGER LOGIC (CRUD, Courses, Sorting, Supabase Upload, Calendar) ---
     if (document.getElementById("taskContainer")) {
         
-        // Blank state for new users
-        let courses = []; 
-        let tasks = [];
-        let currentUser = null;
+        // Data State
+        let courses = ["LBYCPG3", "MATH101"];
+        
+        let tasks = [
+            { id: 1, title: "Finish HTML Lab", course: "LBYCPG3", desc: "Complete 5 HTML pages and CSS styling.", priority: "High", status: "Pending", date: "2026-04-10", time: "23:59", image: "https://images.unsplash.com/photo-1618477247222-ac60ceb3a5a4?auto=format&fit=crop&w=400&q=80" },
+            { id: 2, title: "Calculus Homework", course: "MATH101", desc: "Derivatives chapter 4 review sheet.", priority: "Medium", status: "Pending", date: "2026-04-06", time: "14:00", image: "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?auto=format&fit=crop&w=400&q=80" }
+        ];
 
+        // DOM Elements
         const taskContainer = document.getElementById("taskContainer");
         const filterContainer = document.getElementById("courseFilters");
         const selectContainer = document.getElementById("taskCourseInput");
+        
         const detailsModal = new bootstrap.Modal(document.getElementById('taskModal'));
         const formModal = new bootstrap.Modal(document.getElementById('taskFormModal'));
-        
         let currentEditingId = null; 
         let calendarInstance = null;
 
-        // FETCH DATA FROM DATABASE
-        async function loadUserData() {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) {
-                window.location.href = "index.html";
-                return;
-            }
-            currentUser = user;
-
-            // Load Courses
-            const { data: dbCourses } = await supabase.from('courses').select('name').eq('user_id', user.id);
-            courses = dbCourses ? dbCourses.map(c => c.name) : [];
-
-            // Load Tasks
-            const { data: dbTasks } = await supabase.from('tasks').select('*').eq('user_id', user.id);
-            tasks = dbTasks || [];
-
-            renderCourseUI();
-            renderTasks();
-            renderCalendar();
-            updateAnalytics(); // Update numbers from 0
-        }
-
-        // RENDER COURSES
+        // -- Render Dynamic Courses (With Delete Functionality) --
         window.renderCourseUI = function() {
             const checkedCb = document.querySelector('.filter-cb:checked');
             const currentChecked = checkedCb ? checkedCb.value : "All";
             
             filterContainer.innerHTML = `
                 <li class="list-group-item d-flex justify-content-between align-items-center">
-                    <div><input class="form-check-input filter-cb" type="checkbox" value="All" ${currentChecked === "All" ? "checked" : ""}> All</div>
+                    <div>
+                        <input class="form-check-input filter-cb" type="checkbox" value="All" ${currentChecked === "All" ? "checked" : ""}> All
+                    </div>
                 </li>`;
             
             courses.forEach(course => {
+                const isChecked = currentChecked === course ? "checked" : "";
                 filterContainer.innerHTML += `
                     <li class="list-group-item d-flex justify-content-between align-items-center">
-                        <div><input class="form-check-input filter-cb" type="checkbox" value="${course}" ${currentChecked === course ? "checked" : ""}> ${course}</div>
-                        <button class="btn btn-sm btn-outline-danger border-0 py-0 px-2" onclick="deleteCourse('${course}', event)">×</button>
+                        <div>
+                            <input class="form-check-input filter-cb" type="checkbox" value="${course}" ${isChecked}> ${course}
+                        </div>
+                        <button class="btn btn-sm btn-outline-danger border-0 py-0 px-2" onclick="deleteCourse('${course}', event)" title="Delete Course">×</button>
                     </li>`;
             });
 
-            document.querySelectorAll('.filter-cb').forEach(cb => {
+            const checkboxes = document.querySelectorAll('.filter-cb');
+            checkboxes.forEach(cb => {
                 cb.addEventListener('change', (e) => {
-                    document.querySelectorAll('.filter-cb').forEach(box => box.checked = false); 
+                    checkboxes.forEach(box => box.checked = false); 
                     e.target.checked = true;
                     renderTasks(e.target.value);
                 });
             });
 
-            selectContainer.innerHTML = courses.map(c => `<option value="${c}">${c}</option>`).join("");
+            // Populate Form Dropdown and add "+ Add New Course"
+            selectContainer.innerHTML = "";
+            courses.forEach(course => {
+                selectContainer.innerHTML += `<option value="${course}">${course}</option>`;
+            });
             selectContainer.innerHTML += `<option value="__ADD_NEW__" class="text-success fw-bold">+ Add New Course</option>`;
         }
 
-        // DELETE COURSE
-        window.deleteCourse = async function(courseName, event) {
+        // -- Delete Course Logic --
+        window.deleteCourse = function(courseName, event) {
             event.stopPropagation();
-            if(confirm(`Delete "${courseName}"? This won't delete tasks but unassigns them.`)) {
-                await supabase.from('courses').delete().eq('user_id', currentUser.id).eq('name', courseName);
+            if(confirm(`Are you sure you want to delete the course "${courseName}"?`)) {
                 courses = courses.filter(c => c !== courseName);
                 renderCourseUI();
-                renderTasks("All");
+                
+                const checkedCb = document.querySelector('.filter-cb:checked');
+                if(!checkedCb) {
+                    document.querySelector('input[value="All"]').checked = true;
+                    renderTasks("All");
+                }
             }
         };
 
-        // ADD COURSE
-        document.getElementById("addCourseForm").addEventListener("submit", async (e) => {
+        // -- Add New Course from Sidebar --
+        document.getElementById("addCourseForm").addEventListener("submit", (e) => {
             e.preventDefault();
-            const input = document.getElementById("newCourseInput");
-            const name = input.value.trim().toUpperCase();
+            const inputField = document.getElementById("newCourseInput");
+            const newCourse = inputField.value.trim().toUpperCase();
 
-            if (name && !courses.includes(name)) {
-                const { error } = await supabase.from('courses').insert([{ user_id: currentUser.id, name: name }]);
-                if (!error) {
-                    courses.push(name);
-                    renderCourseUI();
-                    input.value = "";
+            if (newCourse && !courses.includes(newCourse)) {
+                courses.push(newCourse);
+                renderCourseUI(); 
+                inputField.value = ""; 
+            } else if (courses.includes(newCourse)) {
+                alert("Course already exists!");
+            }
+        });
+
+        // -- Add New Course from Modal Dropdown --
+        selectContainer.addEventListener('change', (e) => {
+            if(e.target.value === "__ADD_NEW__") {
+                const newCourse = prompt("Enter the name of the new course:");
+                if(newCourse && newCourse.trim() !== "") {
+                    const upperCourse = newCourse.trim().toUpperCase();
+                    if(!courses.includes(upperCourse)) {
+                        courses.push(upperCourse);
+                        renderCourseUI(); 
+                    }
+                    e.target.value = upperCourse; 
+                } else {
+                    e.target.value = courses[0] || ""; 
                 }
             }
         });
 
-        // RENDER TASKS (WITH RED OVERDUE LOGIC)
+        // -- Render Tasks (List View) --
         function renderTasks(filter = "All") {
             taskContainer.innerHTML = "";
-            let filtered = filter === "All" ? tasks : tasks.filter(t => t.course === filter);
+            let filteredTasks = filter === "All" ? tasks : tasks.filter(t => t.course === filter);
             
-            const now = new Date();
-
-            filtered.forEach(task => {
-                const taskDeadline = new Date(`${task.date}T${task.time}`);
-                const isOverdue = taskDeadline < now && task.status !== "Completed";
-
-                const cardClass = isOverdue ? "border-danger bg-danger-subtle shadow" : "custom-card";
-                const badgeClass = isOverdue ? "bg-danger" : (task.status === "Pending" ? "bg-warning" : "bg-success");
+            // Sort by Date and Time (Closest deadline first)
+            filteredTasks.sort((a, b) => {
+                const dateA = new Date(`${a.date}T${a.time}`);
+                const dateB = new Date(`${b.date}T${b.time}`);
+                return dateA - dateB;
+            });
+            
+            filteredTasks.forEach(task => {
+                const statusColor = task.status === "Pending" ? "warning" : "success";
+                const priorityColor = task.priority === "High" ? "danger" : task.priority === "Medium" ? "primary" : "info";
+                
+                const dateTimeDisplay = new Date(`${task.date}T${task.time}`).toLocaleString([], {dateStyle: 'medium', timeStyle: 'short'});
+                const imgHtml = task.image ? `<img src="${task.image}" class="task-img" alt="Task Image">` : '';
 
                 const cardHtml = `
                     <div class="col-md-6 col-lg-4">
-                        <div class="card ${cardClass} hover-anim h-100" onclick="openTaskModal(${task.id})">
-                            ${task.image ? `<img src="${task.image}" class="task-img">` : ''}
-                            <div class="card-body">
-                                <h5 class="fw-bold">${task.title} ${isOverdue ? "⚠️" : ""}</h5>
-                                <h6 class="text-muted">${task.course}</h6>
-                                <div class="small">📅 ${new Date(`${task.date}T${task.time}`).toLocaleString()}</div>
-                                <div class="mt-2">
-                                    <span class="badge ${badgeClass}">${isOverdue ? "OVERDUE" : task.status}</span>
-                                    <span class="badge bg-secondary">${task.priority}</span>
+                        <div class="card custom-card hover-anim h-100" onclick="openTaskModal(${task.id})">
+                            ${imgHtml}
+                            <div class="card-body task-card-body">
+                                <h5 class="card-title fw-bold">${task.title}</h5>
+                                <h6 class="card-subtitle mb-1 text-muted">${task.course}</h6>
+                                <div class="task-meta">📅 ${dateTimeDisplay}</div>
+                                <div class="mt-auto">
+                                    <span class="badge bg-${statusColor}">${task.status}</span>
+                                    <span class="badge bg-${priorityColor}">${task.priority} Priority</span>
                                 </div>
                             </div>
                         </div>
-                    </div>`;
+                    </div>
+                `;
                 taskContainer.insertAdjacentHTML('beforeend', cardHtml);
             });
-            updateAnalytics();
         }
 
-        // SAVE TASK
+        // -- Render Calendar View --
+        function renderCalendar() {
+            const calendarEl = document.getElementById('calendar');
+            
+            const calendarEvents = tasks.map(task => {
+                let color = task.priority === "High" ? "#dc3545" : task.priority === "Medium" ? "#0d6efd" : "#0dcaf0";
+                if (task.status === "Completed") color = "#198754"; 
+
+                return {
+                    id: task.id,
+                    title: task.title,
+                    start: `${task.date}T${task.time}`,
+                    backgroundColor: color,
+                    borderColor: color,
+                    extendedProps: { ...task }
+                };
+            });
+
+            if (calendarInstance) {
+                calendarInstance.removeAllEvents();
+                calendarInstance.addEventSource(calendarEvents);
+            } else {
+                calendarInstance = new FullCalendar.Calendar(calendarEl, {
+                    initialView: 'dayGridMonth',
+                    headerToolbar: {
+                        left: 'prev,next today',
+                        center: 'title',
+                        right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                    },
+                    events: calendarEvents,
+                    eventClick: function(info) {
+                        openTaskModal(info.event.extendedProps.id);
+                    }
+                });
+                calendarInstance.render();
+            }
+        }
+
+        // Initialize UI
+        renderCourseUI();
+        renderTasks();
+        renderCalendar();
+
+        // -- Open Details Modal --
+        window.openTaskModal = function(id) {
+            currentEditingId = id;
+            const task = tasks.find(t => t.id == id);
+            
+            document.getElementById('modalTitle').innerText = task.title;
+            document.getElementById('modalCourse').innerText = task.course;
+            document.getElementById('modalDateTime').innerText = new Date(`${task.date}T${task.time}`).toLocaleString([], {dateStyle: 'full', timeStyle: 'short'});
+            document.getElementById('modalDesc').innerText = task.desc;
+            document.getElementById('modalPriority').innerText = task.priority;
+            document.getElementById('modalStatus').innerText = task.status;
+            
+            const modalImg = document.getElementById('modalImage');
+            if(task.image) {
+                modalImg.src = task.image;
+                modalImg.classList.remove('d-none');
+            } else {
+                modalImg.classList.add('d-none');
+            }
+
+            detailsModal.show();
+        };
+
+        // -- Open Add Task Form --
+        document.getElementById('btnOpenAddTask').addEventListener('click', () => {
+            document.getElementById('taskForm').reset();
+            document.getElementById('taskIdInput').value = ""; 
+            document.getElementById('existingImageURL').value = ""; 
+            document.getElementById('imageHelperText').innerText = ""; 
+            document.getElementById('formModalTitle').innerText = "Add New Task";
+            formModal.show();
+        });
+
+        // -- Open Edit Task Form --
+        document.getElementById('btnEditTask').addEventListener('click', () => {
+            detailsModal.hide();
+            const task = tasks.find(t => t.id == currentEditingId);
+            
+            document.getElementById('taskIdInput').value = task.id;
+            document.getElementById('taskTitleInput').value = task.title;
+            document.getElementById('taskCourseInput').value = task.course;
+            document.getElementById('taskDateInput').value = task.date;
+            document.getElementById('taskTimeInput').value = task.time;
+            
+            document.getElementById('existingImageURL').value = task.image || "";
+            document.getElementById('imageHelperText').innerText = task.image ? "Leave empty to keep existing image." : "";
+            document.getElementById('taskImageInput').value = ""; 
+            
+            document.getElementById('taskPriorityInput').value = task.priority;
+            document.getElementById('taskStatusInput').value = task.status;
+            document.getElementById('taskDescInput').value = task.desc;
+            
+            document.getElementById('formModalTitle').innerText = "Edit Task";
+            formModal.show();
+        });
+
+        // -- Save Task (ASYNC Handle Supabase Upload & Sync Views) --
         document.getElementById('taskForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            
             const submitBtn = document.getElementById('btnSaveTask');
             submitBtn.disabled = true;
+            submitBtn.innerText = "Uploading & Saving...";
 
             let finalImageUrl = document.getElementById('existingImageURL').value;
-            const file = document.getElementById('taskImageInput').files[0];
+            const imageFile = document.getElementById('taskImageInput').files[0];
 
-            if (file) {
-                const path = `uploads/${currentUser.id}/${Date.now()}_${file.name}`;
-                const { error: uploadError } = await supabase.storage.from('task-images').upload(path, file);
-                if (!uploadError) {
-                    const { data } = supabase.storage.from('task-images').getPublicUrl(path);
-                    finalImageUrl = data.publicUrl;
+            if (imageFile) {
+                const fileExt = imageFile.name.split('.').pop();
+                const fileName = `${Date.now()}.${fileExt}`;
+                const filePath = `uploads/${fileName}`;
+
+                const { data, error } = await supabase.storage
+                    .from('task-images')
+                    .upload(filePath, imageFile);
+
+                if (error) {
+                    alert("Image upload failed: " + error.message);
+                    submitBtn.disabled = false;
+                    submitBtn.innerText = "Save Task";
+                    return; 
                 }
+
+                const { data: publicUrlData } = supabase.storage
+                    .from('task-images')
+                    .getPublicUrl(filePath);
+
+                finalImageUrl = publicUrlData.publicUrl;
             }
 
             const idInput = document.getElementById('taskIdInput').value;
-            const taskObj = {
-                user_id: currentUser.id,
+            const newTask = {
+                id: idInput ? parseInt(idInput) : Date.now(), 
                 title: document.getElementById('taskTitleInput').value,
                 course: document.getElementById('taskCourseInput').value,
                 date: document.getElementById('taskDateInput').value,
                 time: document.getElementById('taskTimeInput').value,
-                image: finalImageUrl,
+                image: finalImageUrl, 
                 priority: document.getElementById('taskPriorityInput').value,
                 status: document.getElementById('taskStatusInput').value,
-                desc: document.getElementById('taskDescInput').value
+                desc: document.getElementById('taskDescInput').value,
             };
 
             if (idInput) {
-                await supabase.from('tasks').update(taskObj).eq('id', idInput);
+                const index = tasks.findIndex(t => t.id == parseInt(idInput));
+                tasks[index] = newTask;
             } else {
-                const { data } = await supabase.from('tasks').insert([taskObj]).select();
-                if (data) tasks.push(data[0]);
+                tasks.push(newTask);
             }
 
-            formModal.hide();
-            await loadUserData(); // Refresh local state
             submitBtn.disabled = false;
+            submitBtn.innerText = "Save Task";
+            formModal.hide();
+            
+            // Sync BOTH views
+            const checkedCb = document.querySelector('.filter-cb:checked');
+            renderTasks(checkedCb ? checkedCb.value : "All");
+            renderCalendar();
         });
 
-        // DELETE TASK
-        document.getElementById('btnDeleteTask').addEventListener('click', async () => {
-            if(confirm("Delete this task?")) {
-                await supabase.from('tasks').delete().eq('id', currentEditingId);
+        // -- Delete Task (Sync Views) --
+        document.getElementById('btnDeleteTask').addEventListener('click', () => {
+            if(confirm("Are you sure you want to delete this task?")) {
+                tasks = tasks.filter(t => t.id != currentEditingId);
                 detailsModal.hide();
-                await loadUserData();
+                
+                // Sync BOTH views
+                const checkedCb = document.querySelector('.filter-cb:checked');
+                renderTasks(checkedCb ? checkedCb.value : "All");
+                renderCalendar();
             }
         });
 
-        // DEFAULT DATE TO TODAY
-        document.getElementById('btnOpenAddTask').addEventListener('click', () => {
-            document.getElementById('taskForm').reset();
-            document.getElementById('taskIdInput').value = ""; 
-            document.getElementById('taskDateInput').value = new Date().toISOString().split('T')[0];
-            formModal.show();
+        // -- View Toggling --
+        document.getElementById("btnCalView").addEventListener("click", () => {
+            document.getElementById("taskContainer").classList.add("d-none");
+            document.getElementById("calendarContainer").classList.remove("d-none");
+            document.getElementById("btnCalView").classList.add("active");
+            document.getElementById("btnListView").classList.remove("active");
+            
+            // Force Calendar to resize properly
+            setTimeout(() => calendarInstance.render(), 10);
         });
 
-        // --- 3. ANALYTICS LOGIC (DYNAMIC FROM 0) ---
-        function updateAnalytics() {
-            const total = tasks.length;
-            const completed = tasks.filter(t => t.status === "Completed").length;
-            const pending = total - completed;
-            const completionRate = total === 0 ? 0 : Math.round((completed / total) * 100);
+        document.getElementById("btnListView").addEventListener("click", () => {
+            document.getElementById("calendarContainer").classList.add("d-none");
+            document.getElementById("taskContainer").classList.remove("d-none");
+            document.getElementById("btnListView").classList.add("active");
+            document.getElementById("btnCalView").classList.remove("active");
+        });
+    }
 
-            // If these IDs exist on your dashboard/analytics page, they will update
-            if(document.getElementById("statTotalTasks")) document.getElementById("statTotalTasks").innerText = total;
-            if(document.getElementById("statCompletedTasks")) document.getElementById("statCompletedTasks").innerText = completed;
-            if(document.getElementById("statPendingTasks")) document.getElementById("statPendingTasks").innerText = pending;
-            if(document.getElementById("statCompletionRate")) document.getElementById("statCompletionRate").innerText = completionRate + "%";
-        }
-
-        // Initialize
-        loadUserData();
+    // --- 3. CONTACT FORM VALIDATION ---
+    const contactForm = document.getElementById("contactForm");
+    if (contactForm) {
+        contactForm.addEventListener("submit", (e) => {
+            e.preventDefault();
+            const message = document.getElementById("messageBox").value.trim();
+            if (message.length < 10) {
+                alert("Message is too short. Please provide more detail.");
+            } else {
+                alert("Message sent successfully! Our team will get back to you.");
+                contactForm.reset();
+            }
+        });
     }
 });
