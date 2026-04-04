@@ -8,11 +8,13 @@ document.addEventListener("DOMContentLoaded", () => {
     
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // --- 1. LOGIN / REGISTER LOGIC ---
+    // --- 1. LOGIN / REGISTER LOGIC (NOW USING SUPABASE AUTH) ---
     const loginForm = document.getElementById("loginForm");
     const registerForm = document.getElementById("registerForm");
 
-    if (document.getElementById("showRegister")) {
+    if (loginForm && registerForm) {
+        
+        // Toggle between Login and Register views
         document.getElementById("showRegister").addEventListener("click", (e) => {
             e.preventDefault();
             loginForm.classList.add("d-none");
@@ -25,15 +27,61 @@ document.addEventListener("DOMContentLoaded", () => {
             loginForm.classList.remove("d-none");
         });
 
-        loginForm.addEventListener("submit", (e) => {
+        // Handle REAL Registration
+        registerForm.addEventListener("submit", async (e) => {
             e.preventDefault();
-            window.location.href = "dashboard.html";
+            const email = document.getElementById("regEmail").value;
+            const password = document.getElementById("regPassword").value;
+            const fullName = document.getElementById("regName").value;
+            
+            const regBtn = document.getElementById("regBtn");
+            regBtn.disabled = true;
+            regBtn.innerText = "Creating account...";
+
+            // Send data to Supabase Database
+            const { data, error } = await supabase.auth.signUp({
+                email: email,
+                password: password,
+                options: {
+                    data: {
+                        full_name: fullName,
+                    }
+                }
+            });
+
+            if (error) {
+                alert("Registration failed: " + error.message);
+                regBtn.disabled = false;
+                regBtn.innerText = "Register";
+            } else {
+                alert("Account created successfully!");
+                window.location.href = "dashboard.html";
+            }
         });
-        
-        registerForm.addEventListener("submit", (e) => {
+
+        // Handle REAL Login
+        loginForm.addEventListener("submit", async (e) => {
             e.preventDefault();
-            alert("Account created successfully!");
-            window.location.href = "dashboard.html";
+            const email = document.getElementById("loginEmail").value;
+            const password = document.getElementById("loginPassword").value;
+            
+            const loginBtn = document.getElementById("loginBtn");
+            loginBtn.disabled = true;
+            loginBtn.innerText = "Signing in...";
+
+            // Verify with Supabase Database
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email: email,
+                password: password,
+            });
+
+            if (error) {
+                alert("Login failed: " + error.message);
+                loginBtn.disabled = false;
+                loginBtn.innerText = "Login";
+            } else {
+                window.location.href = "dashboard.html";
+            }
         });
     }
 
