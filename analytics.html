@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaskMaster - Analytics</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary sticky-top">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="dashboard.html">TaskMaster</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="dashboard.html">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="tasks.html">Tasks</a></li>
+                    <li class="nav-item"><a class="nav-link active" href="analytics.html">Analytics</a></li>
+                    <li class="nav-item"><a class="nav-link" href="about.html">About Us</a></li>
+                    <li class="nav-item"><a class="nav-link text-danger" href="index.html" id="logoutBtn">Logout</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container my-5 fade-in">
+        <h2 class="mb-4">Performance Analytics</h2>
+        
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card p-4 shadow-sm mb-4 custom-card">
+                    <h4 class="mb-3">Overall Completion Rate</h4>
+                    <div class="progress mb-3" style="height: 30px;">
+                        <div class="progress-bar bg-success progress-bar-striped progress-bar-animated" role="progressbar" style="width: 75%">75%</div>
+                    </div>
+                    <p class="text-muted">You have completed 15 out of 20 tasks this term!</p>
+                </div>
+            </div>
+            
+            <div class="col-lg-4">
+                <div class="card p-4 shadow-sm mb-4 custom-card bg-primary text-white text-center">
+                    <h5>Current Streak</h5>
+                    <h1 class="display-3 fw-bold">5</h1>
+                    <p>Days in a row</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

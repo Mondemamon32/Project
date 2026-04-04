@@ -1,0 +1,70 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: #f8f9fa;
+}
+
+/* Custom Hero Section with Flexbox */
+.hero-section {
+    background: linear-gradient(135deg, #0d6efd, #0dcaf0);
+    min-height: 30vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
+/* CSS Grid for Dashboard */
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+}
+
+/* Custom Card Styling & Animations */
+.custom-card {
+    border-radius: 15px;
+    border: none;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+}
+
+.hover-anim {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.hover-anim:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+    cursor: pointer;
+}
+
+/* Fade-in Animation */
+.fade-in {
+    animation: fadeIn 0.6s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(15px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Task Image Styling */
+.task-img {
+    height: 160px;
+    width: 100%;
+    object-fit: cover;
+    border-top-left-radius: 15px; 
+    border-top-right-radius: 15px;
+}
+
+.task-card-body {
+    display: flex;
+    flex-direction: column;
+}
+
+.task-meta {
+    font-size: 0.85rem;
+    color: #6c757d;
+    margin-bottom: 10px;
+}
