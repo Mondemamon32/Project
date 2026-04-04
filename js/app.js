@@ -3,8 +3,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // ==========================================
     // 🚀 INITIALIZE SUPABASE
     // ==========================================
-    const SUPABASE_URL = 'https://pselhaneizlyxrjlwrdi.supabase.co'; // <-- PASTE YOUR URL
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBzZWxoYW5laXpseXhyamx3cmRpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzMDIzMzQsImV4cCI6MjA5MDg3ODMzNH0.fY09eWmTfVDboPXWVhyMTxk4PbREAafognPfDjybsMA'; // <-- PASTE YOUR KEY
+    const SUPABASE_URL = 'https://pselhaneizlyxrjlwrdi.supabase.co'; 
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBzZWxoYW5laXpseXhyamx3cmRpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzMDIzMzQsImV4cCI6MjA5MDg3ODMzNH0.fY09eWmTfVDboPXWVhyMTxk4PbREAafognPfDjybsMA'; 
     
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -38,7 +38,6 @@ document.addEventListener("DOMContentLoaded", () => {
             regBtn.disabled = true;
             regBtn.innerText = "Creating account...";
 
-            // Send data to Supabase Database
             const { data, error } = await supabase.auth.signUp({
                 email: email,
                 password: password,
@@ -69,7 +68,6 @@ document.addEventListener("DOMContentLoaded", () => {
             loginBtn.disabled = true;
             loginBtn.innerText = "Signing in...";
 
-            // Verify with Supabase Database
             const { data, error } = await supabase.auth.signInWithPassword({
                 email: email,
                 password: password,
@@ -85,7 +83,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // --- 2. TASK MANAGER LOGIC (CRUD, Courses, Sorting, Supabase Upload) ---
+    // --- 2. TASK MANAGER LOGIC (CRUD, Courses, Sorting, Supabase Upload, Calendar) ---
     if (document.getElementById("taskContainer")) {
         
         // Data State
@@ -104,22 +102,28 @@ document.addEventListener("DOMContentLoaded", () => {
         const detailsModal = new bootstrap.Modal(document.getElementById('taskModal'));
         const formModal = new bootstrap.Modal(document.getElementById('taskFormModal'));
         let currentEditingId = null; 
+        let calendarInstance = null;
 
-        // -- Render Dynamic Courses --
-        function renderCourseUI() {
+        // -- Render Dynamic Courses (With Delete Functionality) --
+        window.renderCourseUI = function() {
             const checkedCb = document.querySelector('.filter-cb:checked');
             const currentChecked = checkedCb ? checkedCb.value : "All";
             
             filterContainer.innerHTML = `
-                <li class="list-group-item">
-                    <input class="form-check-input filter-cb" type="checkbox" value="All" ${currentChecked === "All" ? "checked" : ""}> All
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <input class="form-check-input filter-cb" type="checkbox" value="All" ${currentChecked === "All" ? "checked" : ""}> All
+                    </div>
                 </li>`;
             
             courses.forEach(course => {
                 const isChecked = currentChecked === course ? "checked" : "";
                 filterContainer.innerHTML += `
-                    <li class="list-group-item">
-                        <input class="form-check-input filter-cb" type="checkbox" value="${course}" ${isChecked}> ${course}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <input class="form-check-input filter-cb" type="checkbox" value="${course}" ${isChecked}> ${course}
+                        </div>
+                        <button class="btn btn-sm btn-outline-danger border-0 py-0 px-2" onclick="deleteCourse('${course}', event)" title="Delete Course">×</button>
                     </li>`;
             });
 
@@ -132,13 +136,30 @@ document.addEventListener("DOMContentLoaded", () => {
                 });
             });
 
+            // Populate Form Dropdown and add "+ Add New Course"
             selectContainer.innerHTML = "";
             courses.forEach(course => {
                 selectContainer.innerHTML += `<option value="${course}">${course}</option>`;
             });
+            selectContainer.innerHTML += `<option value="__ADD_NEW__" class="text-success fw-bold">+ Add New Course</option>`;
         }
 
-        // -- Add New Course --
+        // -- Delete Course Logic --
+        window.deleteCourse = function(courseName, event) {
+            event.stopPropagation();
+            if(confirm(`Are you sure you want to delete the course "${courseName}"?`)) {
+                courses = courses.filter(c => c !== courseName);
+                renderCourseUI();
+                
+                const checkedCb = document.querySelector('.filter-cb:checked');
+                if(!checkedCb) {
+                    document.querySelector('input[value="All"]').checked = true;
+                    renderTasks("All");
+                }
+            }
+        };
+
+        // -- Add New Course from Sidebar --
         document.getElementById("addCourseForm").addEventListener("submit", (e) => {
             e.preventDefault();
             const inputField = document.getElementById("newCourseInput");
@@ -153,7 +174,24 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
 
-        // -- Render Tasks --
+        // -- Add New Course from Modal Dropdown --
+        selectContainer.addEventListener('change', (e) => {
+            if(e.target.value === "__ADD_NEW__") {
+                const newCourse = prompt("Enter the name of the new course:");
+                if(newCourse && newCourse.trim() !== "") {
+                    const upperCourse = newCourse.trim().toUpperCase();
+                    if(!courses.includes(upperCourse)) {
+                        courses.push(upperCourse);
+                        renderCourseUI(); 
+                    }
+                    e.target.value = upperCourse; 
+                } else {
+                    e.target.value = courses[0] || ""; 
+                }
+            }
+        });
+
+        // -- Render Tasks (List View) --
         function renderTasks(filter = "All") {
             taskContainer.innerHTML = "";
             let filteredTasks = filter === "All" ? tasks : tasks.filter(t => t.course === filter);
@@ -192,14 +230,53 @@ document.addEventListener("DOMContentLoaded", () => {
             });
         }
 
+        // -- Render Calendar View --
+        function renderCalendar() {
+            const calendarEl = document.getElementById('calendar');
+            
+            const calendarEvents = tasks.map(task => {
+                let color = task.priority === "High" ? "#dc3545" : task.priority === "Medium" ? "#0d6efd" : "#0dcaf0";
+                if (task.status === "Completed") color = "#198754"; 
+
+                return {
+                    id: task.id,
+                    title: task.title,
+                    start: `${task.date}T${task.time}`,
+                    backgroundColor: color,
+                    borderColor: color,
+                    extendedProps: { ...task }
+                };
+            });
+
+            if (calendarInstance) {
+                calendarInstance.removeAllEvents();
+                calendarInstance.addEventSource(calendarEvents);
+            } else {
+                calendarInstance = new FullCalendar.Calendar(calendarEl, {
+                    initialView: 'dayGridMonth',
+                    headerToolbar: {
+                        left: 'prev,next today',
+                        center: 'title',
+                        right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                    },
+                    events: calendarEvents,
+                    eventClick: function(info) {
+                        openTaskModal(info.event.extendedProps.id);
+                    }
+                });
+                calendarInstance.render();
+            }
+        }
+
         // Initialize UI
         renderCourseUI();
         renderTasks();
+        renderCalendar();
 
         // -- Open Details Modal --
         window.openTaskModal = function(id) {
             currentEditingId = id;
-            const task = tasks.find(t => t.id === id);
+            const task = tasks.find(t => t.id == id);
             
             document.getElementById('modalTitle').innerText = task.title;
             document.getElementById('modalCourse').innerText = task.course;
@@ -232,7 +309,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // -- Open Edit Task Form --
         document.getElementById('btnEditTask').addEventListener('click', () => {
             detailsModal.hide();
-            const task = tasks.find(t => t.id === currentEditingId);
+            const task = tasks.find(t => t.id == currentEditingId);
             
             document.getElementById('taskIdInput').value = task.id;
             document.getElementById('taskTitleInput').value = task.title;
@@ -240,10 +317,9 @@ document.addEventListener("DOMContentLoaded", () => {
             document.getElementById('taskDateInput').value = task.date;
             document.getElementById('taskTimeInput').value = task.time;
             
-            // Handle existing image mapping
             document.getElementById('existingImageURL').value = task.image || "";
             document.getElementById('imageHelperText').innerText = task.image ? "Leave empty to keep existing image." : "";
-            document.getElementById('taskImageInput').value = ""; // Clear file input
+            document.getElementById('taskImageInput').value = ""; 
             
             document.getElementById('taskPriorityInput').value = task.priority;
             document.getElementById('taskStatusInput').value = task.status;
@@ -253,7 +329,7 @@ document.addEventListener("DOMContentLoaded", () => {
             formModal.show();
         });
 
-        // -- Save Task (ASYNC Handle Supabase Upload) --
+        // -- Save Task (ASYNC Handle Supabase Upload & Sync Views) --
         document.getElementById('taskForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
@@ -264,14 +340,11 @@ document.addEventListener("DOMContentLoaded", () => {
             let finalImageUrl = document.getElementById('existingImageURL').value;
             const imageFile = document.getElementById('taskImageInput').files[0];
 
-            // 1. If user selected a new file, upload to Supabase
             if (imageFile) {
-                // Generate a unique filename using timestamp
                 const fileExt = imageFile.name.split('.').pop();
                 const fileName = `${Date.now()}.${fileExt}`;
                 const filePath = `uploads/${fileName}`;
 
-                // Upload to Supabase 'task-images' bucket
                 const { data, error } = await supabase.storage
                     .from('task-images')
                     .upload(filePath, imageFile);
@@ -280,10 +353,9 @@ document.addEventListener("DOMContentLoaded", () => {
                     alert("Image upload failed: " + error.message);
                     submitBtn.disabled = false;
                     submitBtn.innerText = "Save Task";
-                    return; // Stop execution if upload fails
+                    return; 
                 }
 
-                // Get the public URL to display it in the app
                 const { data: publicUrlData } = supabase.storage
                     .from('task-images')
                     .getPublicUrl(filePath);
@@ -291,7 +363,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 finalImageUrl = publicUrlData.publicUrl;
             }
 
-            // 2. Save the task data locally
             const idInput = document.getElementById('taskIdInput').value;
             const newTask = {
                 id: idInput ? parseInt(idInput) : Date.now(), 
@@ -299,36 +370,39 @@ document.addEventListener("DOMContentLoaded", () => {
                 course: document.getElementById('taskCourseInput').value,
                 date: document.getElementById('taskDateInput').value,
                 time: document.getElementById('taskTimeInput').value,
-                image: finalImageUrl, // Use uploaded URL or existing URL
+                image: finalImageUrl, 
                 priority: document.getElementById('taskPriorityInput').value,
                 status: document.getElementById('taskStatusInput').value,
                 desc: document.getElementById('taskDescInput').value,
             };
 
             if (idInput) {
-                const index = tasks.findIndex(t => t.id === parseInt(idInput));
+                const index = tasks.findIndex(t => t.id == parseInt(idInput));
                 tasks[index] = newTask;
             } else {
                 tasks.push(newTask);
             }
 
-            // 3. Reset form and UI
             submitBtn.disabled = false;
             submitBtn.innerText = "Save Task";
             formModal.hide();
             
+            // Sync BOTH views
             const checkedCb = document.querySelector('.filter-cb:checked');
             renderTasks(checkedCb ? checkedCb.value : "All");
+            renderCalendar();
         });
 
-        // -- Delete Task --
+        // -- Delete Task (Sync Views) --
         document.getElementById('btnDeleteTask').addEventListener('click', () => {
             if(confirm("Are you sure you want to delete this task?")) {
-                tasks = tasks.filter(t => t.id !== currentEditingId);
+                tasks = tasks.filter(t => t.id != currentEditingId);
                 detailsModal.hide();
                 
+                // Sync BOTH views
                 const checkedCb = document.querySelector('.filter-cb:checked');
                 renderTasks(checkedCb ? checkedCb.value : "All");
+                renderCalendar();
             }
         });
 
@@ -338,6 +412,9 @@ document.addEventListener("DOMContentLoaded", () => {
             document.getElementById("calendarContainer").classList.remove("d-none");
             document.getElementById("btnCalView").classList.add("active");
             document.getElementById("btnListView").classList.remove("active");
+            
+            // Force Calendar to resize properly
+            setTimeout(() => calendarInstance.render(), 10);
         });
 
         document.getElementById("btnListView").addEventListener("click", () => {
