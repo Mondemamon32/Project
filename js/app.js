@@ -8,7 +8,7 @@ document.addEventListener("DOMContentLoaded", () => {
     
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // --- 1. LOGIN / REGISTER LOGIC (NOW USING SUPABASE AUTH) ---
+    // --- 1. LOGIN / REGISTER LOGIC ---
     const loginForm = document.getElementById("loginForm");
     const registerForm = document.getElementById("registerForm");
 
@@ -87,12 +87,35 @@ document.addEventListener("DOMContentLoaded", () => {
     if (document.getElementById("taskContainer")) {
         
         // Data State
-        let courses = ["LBYCPG3", "MATH101"];
-        
-        let tasks = [
-            { id: 1, title: "Finish HTML Lab", course: "LBYCPG3", desc: "Complete 5 HTML pages and CSS styling.", priority: "High", status: "Pending", date: "2026-04-10", time: "23:59", image: "https://images.unsplash.com/photo-1618477247222-ac60ceb3a5a4?auto=format&fit=crop&w=400&q=80" },
-            { id: 2, title: "Calculus Homework", course: "MATH101", desc: "Derivatives chapter 4 review sheet.", priority: "Medium", status: "Pending", date: "2026-04-06", time: "14:00", image: "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?auto=format&fit=crop&w=400&q=80" }
-        ];
+        let courses = [];
+        let tasks = [];
+
+        async function fetchAllData() {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
+
+            // Fetch Courses from Supabase
+            const { data: cData } = await supabase.from('courses').select('*').eq('user_id', user.id);
+            courses = cData ? cData.map(c => c.course_name) : [];
+
+            // Fetch Tasks from Supabase 
+            const { data: tData } = await supabase.from('tasks').select('*').eq('user_id', user.id);
+            tasks = tData ? tData.map(t => ({
+                id: t.id,
+                title: t.title,
+                course: t.course,
+                date: t.date,
+                time: t.time,
+                image: t.image,
+                priority: t.priority,
+                status: t.status,
+                desc: t.desc_text 
+            })) : [];
+
+            renderCourseUI();
+            renderTasks();
+            renderCalendar();
+        }
 
         // DOM Elements
         const taskContainer = document.getElementById("taskContainer");
@@ -145,29 +168,34 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         // -- Delete Course Logic --
-        window.deleteCourse = function(courseName, event) {
+        window.deleteCourse = async function(courseName, event) { 
             event.stopPropagation();
             if(confirm(`Are you sure you want to delete the course "${courseName}"?`)) {
-                courses = courses.filter(c => c !== courseName);
-                renderCourseUI();
+                const { error } = await supabase.from('courses').delete().eq('course_name', courseName);
                 
-                const checkedCb = document.querySelector('.filter-cb:checked');
-                if(!checkedCb) {
-                    document.querySelector('input[value="All"]').checked = true;
-                    renderTasks("All");
+                if (!error) {
+                    await fetchAllData();
+                    const checkedCb = document.querySelector('.filter-cb:checked');
+                    if(!checkedCb) {
+                        const allBtn = document.querySelector('input[value="All"]');
+                        if (allBtn) allBtn.checked = true;
+                        renderTasks("All");
+                    }
                 }
             }
         };
 
         // -- Add New Course from Sidebar --
-        document.getElementById("addCourseForm").addEventListener("submit", (e) => {
+        document.getElementById("addCourseForm").addEventListener("submit", async (e) => { 
             e.preventDefault();
             const inputField = document.getElementById("newCourseInput");
             const newCourse = inputField.value.trim().toUpperCase();
 
             if (newCourse && !courses.includes(newCourse)) {
-                courses.push(newCourse);
-                renderCourseUI(); 
+                const { data: { user } } = await supabase.auth.getUser();
+                await supabase.from('courses').insert([{ user_id: user.id, course_name: newCourse }]);
+                
+                await fetchAllData();
                 inputField.value = ""; 
             } else if (courses.includes(newCourse)) {
                 alert("Course already exists!");
@@ -175,14 +203,15 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
         // -- Add New Course from Modal Dropdown --
-        selectContainer.addEventListener('change', (e) => {
+        selectContainer.addEventListener('change', async (e) => { 
             if(e.target.value === "__ADD_NEW__") {
                 const newCourse = prompt("Enter the name of the new course:");
                 if(newCourse && newCourse.trim() !== "") {
                     const upperCourse = newCourse.trim().toUpperCase();
                     if(!courses.includes(upperCourse)) {
-                        courses.push(upperCourse);
-                        renderCourseUI(); 
+                        const { data: { user } } = await supabase.auth.getUser();
+                        await supabase.from('courses').insert([{ user_id: user.id, course_name: upperCourse }]);
+                        await fetchAllData(); 
                     }
                     e.target.value = upperCourse; 
                 } else {
@@ -209,10 +238,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 
                 const dateTimeDisplay = new Date(`${task.date}T${task.time}`).toLocaleString([], {dateStyle: 'medium', timeStyle: 'short'});
                 const imgHtml = task.image ? `<img src="${task.image}" class="task-img" alt="Task Image">` : '';
-
                 const cardHtml = `
                     <div class="col-md-6 col-lg-4">
-                        <div class="card custom-card hover-anim h-100" onclick="openTaskModal(${task.id})">
+                        <div class="card custom-card hover-anim h-100" onclick="openTaskModal('${task.id}')">
                             ${imgHtml}
                             <div class="card-body task-card-body">
                                 <h5 class="card-title fw-bold">${task.title}</h5>
@@ -268,10 +296,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
 
-        // Initialize UI
-        renderCourseUI();
-        renderTasks();
-        renderCalendar();
+        fetchAllData();
 
         // -- Open Details Modal --
         window.openTaskModal = function(id) {
@@ -364,8 +389,9 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             const idInput = document.getElementById('taskIdInput').value;
-            const newTask = {
-                id: idInput ? parseInt(idInput) : Date.now(), 
+            const { data: { user } } = await supabase.auth.getUser();
+            const taskData = {
+                user_id: user.id,
                 title: document.getElementById('taskTitleInput').value,
                 course: document.getElementById('taskCourseInput').value,
                 date: document.getElementById('taskDateInput').value,
@@ -373,36 +399,29 @@ document.addEventListener("DOMContentLoaded", () => {
                 image: finalImageUrl, 
                 priority: document.getElementById('taskPriorityInput').value,
                 status: document.getElementById('taskStatusInput').value,
-                desc: document.getElementById('taskDescInput').value,
+                desc_text: document.getElementById('taskDescInput').value, 
             };
 
             if (idInput) {
-                const index = tasks.findIndex(t => t.id == parseInt(idInput));
-                tasks[index] = newTask;
+                // Update existing row
+                await supabase.from('tasks').update(taskData).eq('id', idInput);
             } else {
-                tasks.push(newTask);
+                // Insert new row
+                await supabase.from('tasks').insert([taskData]);
             }
 
             submitBtn.disabled = false;
             submitBtn.innerText = "Save Task";
             formModal.hide();
-            
-            // Sync BOTH views
-            const checkedCb = document.querySelector('.filter-cb:checked');
-            renderTasks(checkedCb ? checkedCb.value : "All");
-            renderCalendar();
+            await fetchAllData();
         });
 
         // -- Delete Task (Sync Views) --
-        document.getElementById('btnDeleteTask').addEventListener('click', () => {
+        document.getElementById('btnDeleteTask').addEventListener('click', async () => { 
             if(confirm("Are you sure you want to delete this task?")) {
-                tasks = tasks.filter(t => t.id != currentEditingId);
+                await supabase.from('tasks').delete().eq('id', currentEditingId);
                 detailsModal.hide();
-                
-                // Sync BOTH views
-                const checkedCb = document.querySelector('.filter-cb:checked');
-                renderTasks(checkedCb ? checkedCb.value : "All");
-                renderCalendar();
+                await fetchAllData();
             }
         });
 
@@ -414,7 +433,7 @@ document.addEventListener("DOMContentLoaded", () => {
             document.getElementById("btnListView").classList.remove("active");
             
             // Force Calendar to resize properly
-            setTimeout(() => calendarInstance.render(), 10);
+            setTimeout(() => { if(calendarInstance) calendarInstance.render(); }, 10);
         });
 
         document.getElementById("btnListView").addEventListener("click", () => {
