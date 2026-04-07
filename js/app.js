@@ -1,5 +1,40 @@
 document.addEventListener("DOMContentLoaded", () => {
+
     
+    // ==========================================
+    // DARK/LIGHT MODE
+    // ==========================================
+
+    // Text label for light/dark mode toggle
+    const modeToggle = document.getElementById("modeToggle");
+    const toggleLabel = document.getElementById("toggleLabel");
+    const htmlElement = document.documentElement;
+
+    // Apply theme changes
+    const applyTheme = (theme) => {
+        if (theme === "dark") {
+            htmlElement.setAttribute("data-bs-theme", "dark");
+            if (toggleLabel) toggleLabel.innerText = "Theme: Dark";
+            if (modeToggle) modeToggle.checked = true;
+        } else {
+            htmlElement.setAttribute("data-bs-theme", "light");
+            if (toggleLabel) toggleLabel.innerText = "Theme: Light";
+            if (modeToggle) modeToggle.checked = false;
+        }
+    };
+
+    // Apply theme from current selection
+    const savedTheme = localStorage.getItem("taskmaster-theme") || "light";
+    applyTheme(savedTheme);
+
+    if (modeToggle) {
+        modeToggle.addEventListener("change", () => {
+            const newTheme = modeToggle.checked ? "dark" : "light";
+            localStorage.setItem("taskmaster-theme", newTheme);
+            applyTheme(newTheme);
+        });
+    }
+
     // ==========================================
     // 🚀 INITIALIZE SUPABASE
     // ==========================================
