@@ -527,47 +527,37 @@ document.addEventListener("DOMContentLoaded", () => {
             });
         }
 
-        if (btnHistoryView) {
-            btnHistoryView.addEventListener("click", () => {
-                calContainer.classList.add("d-none");
-                taskContainer.classList.remove("d-none");
-                
-                btnHistoryView.classList.add("active");
-                btnListView.classList.remove("active");
-                btnCalView.classList.remove("active");
-                
-                activeStatusFilter = "Completed";
-                const currentCourse = document.querySelector('.filter-cb:checked')?.value || "All";
-                renderTasks(currentCourse);
-            });
-        }
+        // -- View Toggling --
+        document.getElementById("btnCalView").addEventListener("click", () => {
+            document.getElementById("taskContainer").classList.add("d-none");
+            document.getElementById("calendarContainer").classList.remove("d-none");
+            document.getElementById("btnCalView").classList.add("active");
+            document.getElementById("btnListView").classList.remove("active");
+            
+            // Force Calendar to resize properly
+            setTimeout(() => calendarInstance.render(), 10);
+        });
 
-        if (btnCalView) {
-            btnCalView.addEventListener("click", () => {
-                taskContainer.classList.add("d-none");
-                calContainer.classList.remove("d-none");
-                
-                btnCalView.classList.add("active");
-                btnListView.classList.remove("active");
-                if (btnHistoryView) btnHistoryView.classList.remove("active");
-                
-                setTimeout(() => { if(calendarInstance) calendarInstance.render(); }, 10);
-            });
-        }
+        document.getElementById("btnListView").addEventListener("click", () => {
+            document.getElementById("calendarContainer").classList.add("d-none");
+            document.getElementById("taskContainer").classList.remove("d-none");
+            document.getElementById("btnListView").classList.add("active");
+            document.getElementById("btnCalView").classList.remove("active");
+        });
     }
 
-    // --- 4. CONTACT FORM VALIDATION ---
+    // --- 3. CONTACT FORM VALIDATION ---
     const contactForm = document.getElementById("contactForm");
     if (contactForm) {
         contactForm.addEventListener("submit", (e) => {
-            e.preventDefault();
             const message = document.getElementById("messageBox").value.trim();
+            
+            // Only block the form IF the message is too short
             if (message.length < 10) {
+                e.preventDefault(); // Stop submission
                 alert("Message is too short. Please provide more detail.");
-            } else {
-                alert("Message sent successfully! Our team will get back to you.");
-                contactForm.reset();
             }
+            // If it is 10 characters or more, the JS does nothing, 
+            // allowing the browser to send the form directly to FormSubmit
         });
     }
-});
