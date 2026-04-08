@@ -1,5 +1,39 @@
 document.addEventListener("DOMContentLoaded", () => {
-    
+
+    // ==========================================
+    // DARK/LIGHT MODE
+    // ==========================================
+
+    // Text label for light/dark mode toggle
+    const modeToggle = document.getElementById("modeToggle");
+    const toggleLabel = document.getElementById("toggleLabel");
+    const htmlElement = document.documentElement;
+
+    // Apply theme changes
+    const applyTheme = (theme) => {
+        if (theme === "dark") {
+            htmlElement.setAttribute("data-bs-theme", "dark");
+            if (toggleLabel) toggleLabel.innerText = "Theme: Dark";
+            if (modeToggle) modeToggle.checked = true;
+        } else {
+            htmlElement.setAttribute("data-bs-theme", "light");
+            if (toggleLabel) toggleLabel.innerText = "Theme: Light";
+            if (modeToggle) modeToggle.checked = false;
+        }
+    };
+
+    // Apply theme from current selection
+    const savedTheme = localStorage.getItem("taskmaster-theme") || "light";
+    applyTheme(savedTheme);
+
+    if (modeToggle) {
+        modeToggle.addEventListener("change", () => {
+            const newTheme = modeToggle.checked ? "dark" : "light";
+            localStorage.setItem("taskmaster-theme", newTheme);
+            applyTheme(newTheme);
+        });
+    }
+
     // ==========================================
     // 🚀 INITIALIZE SUPABASE
     // ==========================================
@@ -8,7 +42,7 @@ document.addEventListener("DOMContentLoaded", () => {
     
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // --- 1. LOGIN / REGISTER LOGIC (NOW USING SUPABASE AUTH) ---
+    // --- 1. LOGIN / REGISTER LOGIC ---
     const loginForm = document.getElementById("loginForm");
     const registerForm = document.getElementById("registerForm");
 
@@ -83,18 +117,83 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // --- 2. TASK MANAGER LOGIC (CRUD, Courses, Sorting, Supabase Upload, Calendar) ---
+    // --- 2. GLOBAL DATA FETCHING & ANALYTICS ---
+    let courses = [];
+    let tasks = [];
+
+    async function fetchAllData() {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        // Fetch Courses from Supabase
+        const { data: cData } = await supabase.from('courses').select('*').eq('user_id', user.id);
+        courses = cData ? cData.map(c => c.course_name) : [];
+
+        // Fetch Tasks from Supabase 
+        const { data: tData } = await supabase.from('tasks').select('*').eq('user_id', user.id);
+        tasks = tData ? tData.map(t => ({
+            id: t.id,
+            title: t.title,
+            course: t.course,
+            date: t.date,
+            time: t.time,
+            image: t.image,
+            priority: t.priority,
+            status: t.status,
+            desc: t.desc_text 
+        })) : [];
+
+        // Update UI based on what page we are on
+        if (document.getElementById("taskContainer")) {
+            renderCourseUI();
+            const currentCourse = document.querySelector('.filter-cb:checked')?.value || "All";
+            renderTasks(currentCourse);
+            renderCalendar();
+        }
+        
+        updateAnalytics();
+    }
+
+    // === Analytics Calculator ===
+    function updateAnalytics() {
+        const progressEl = document.getElementById("analyticsProgress");
+        const textEl = document.getElementById("analyticsText");
+        const streakEl = document.getElementById("analyticsStreak");
+
+        if (!progressEl || !textEl || !streakEl) return; 
+
+        const totalTasks = tasks.length;
+        const completedTasks = tasks.filter(t => t.status === "Completed").length;
+        const completionRate = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
+
+        progressEl.style.width = `${completionRate}%`;
+        progressEl.innerText = `${completionRate}%`;
+        progressEl.className = `progress-bar progress-bar-striped progress-bar-animated ${completionRate === 100 ? 'bg-success' : 'bg-primary'}`;
+        
+        textEl.innerText = `You have completed ${completedTasks} out of ${totalTasks} tasks this term!`;
+
+        const activeStreak = completedTasks > 0 ? Math.min(completedTasks, 7) : 0; 
+        streakEl.innerText = activeStreak;
+    }
+
+    // === Mark as Done Function ===
+    window.markAsDone = async function(id, event) {
+        event.stopPropagation(); 
+        
+        const { error } = await supabase.from('tasks').update({ status: 'Completed' }).eq('id', id);
+        
+        if (!error) {
+            await fetchAllData(); 
+        } else {
+            alert("Error updating task: " + error.message);
+        }
+    };
+
+    fetchAllData();
+
+    // --- 3. TASK MANAGER UI LOGIC ---
     if (document.getElementById("taskContainer")) {
         
-        // Data State
-        let courses = ["LBYCPG3", "MATH101"];
-        
-        let tasks = [
-            { id: 1, title: "Finish HTML Lab", course: "LBYCPG3", desc: "Complete 5 HTML pages and CSS styling.", priority: "High", status: "Pending", date: "2026-04-10", time: "23:59", image: "https://images.unsplash.com/photo-1618477247222-ac60ceb3a5a4?auto=format&fit=crop&w=400&q=80" },
-            { id: 2, title: "Calculus Homework", course: "MATH101", desc: "Derivatives chapter 4 review sheet.", priority: "Medium", status: "Pending", date: "2026-04-06", time: "14:00", image: "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?auto=format&fit=crop&w=400&q=80" }
-        ];
-
-        // DOM Elements
         const taskContainer = document.getElementById("taskContainer");
         const filterContainer = document.getElementById("courseFilters");
         const selectContainer = document.getElementById("taskCourseInput");
@@ -103,8 +202,11 @@ document.addEventListener("DOMContentLoaded", () => {
         const formModal = new bootstrap.Modal(document.getElementById('taskFormModal'));
         let currentEditingId = null; 
         let calendarInstance = null;
+        
+        // NEW STATE: Tracks if we are looking at Pending or Completed tasks
+        let activeStatusFilter = "Pending"; 
 
-        // -- Render Dynamic Courses (With Delete Functionality) --
+        // -- Render Dynamic Courses --
         window.renderCourseUI = function() {
             const checkedCb = document.querySelector('.filter-cb:checked');
             const currentChecked = checkedCb ? checkedCb.value : "All";
@@ -136,7 +238,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 });
             });
 
-            // Populate Form Dropdown and add "+ Add New Course"
             selectContainer.innerHTML = "";
             courses.forEach(course => {
                 selectContainer.innerHTML += `<option value="${course}">${course}</option>`;
@@ -144,45 +245,47 @@ document.addEventListener("DOMContentLoaded", () => {
             selectContainer.innerHTML += `<option value="__ADD_NEW__" class="text-success fw-bold">+ Add New Course</option>`;
         }
 
-        // -- Delete Course Logic --
-        window.deleteCourse = function(courseName, event) {
+        // -- Delete / Add Courses --
+        window.deleteCourse = async function(courseName, event) { 
             event.stopPropagation();
             if(confirm(`Are you sure you want to delete the course "${courseName}"?`)) {
-                courses = courses.filter(c => c !== courseName);
-                renderCourseUI();
-                
-                const checkedCb = document.querySelector('.filter-cb:checked');
-                if(!checkedCb) {
-                    document.querySelector('input[value="All"]').checked = true;
-                    renderTasks("All");
+                const { error } = await supabase.from('courses').delete().eq('course_name', courseName);
+                if (!error) {
+                    await fetchAllData();
+                    const checkedCb = document.querySelector('.filter-cb:checked');
+                    if(!checkedCb) {
+                        const allBtn = document.querySelector('input[value="All"]');
+                        if (allBtn) allBtn.checked = true;
+                        renderTasks("All");
+                    }
                 }
             }
         };
 
-        // -- Add New Course from Sidebar --
-        document.getElementById("addCourseForm").addEventListener("submit", (e) => {
+        document.getElementById("addCourseForm").addEventListener("submit", async (e) => { 
             e.preventDefault();
             const inputField = document.getElementById("newCourseInput");
             const newCourse = inputField.value.trim().toUpperCase();
 
             if (newCourse && !courses.includes(newCourse)) {
-                courses.push(newCourse);
-                renderCourseUI(); 
+                const { data: { user } } = await supabase.auth.getUser();
+                await supabase.from('courses').insert([{ user_id: user.id, course_name: newCourse }]);
+                await fetchAllData();
                 inputField.value = ""; 
             } else if (courses.includes(newCourse)) {
                 alert("Course already exists!");
             }
         });
 
-        // -- Add New Course from Modal Dropdown --
-        selectContainer.addEventListener('change', (e) => {
+        selectContainer.addEventListener('change', async (e) => { 
             if(e.target.value === "__ADD_NEW__") {
                 const newCourse = prompt("Enter the name of the new course:");
                 if(newCourse && newCourse.trim() !== "") {
                     const upperCourse = newCourse.trim().toUpperCase();
                     if(!courses.includes(upperCourse)) {
-                        courses.push(upperCourse);
-                        renderCourseUI(); 
+                        const { data: { user } } = await supabase.auth.getUser();
+                        await supabase.from('courses').insert([{ user_id: user.id, course_name: upperCourse }]);
+                        await fetchAllData(); 
                     }
                     e.target.value = upperCourse; 
                 } else {
@@ -191,28 +294,41 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
 
-        // -- Render Tasks (List View) --
-        function renderTasks(filter = "All") {
+        // -- Render Tasks (Updated with History Filter) --
+        window.renderTasks = function(filter = "All") {
             taskContainer.innerHTML = "";
             let filteredTasks = filter === "All" ? tasks : tasks.filter(t => t.course === filter);
             
-            // Sort by Date and Time (Closest deadline first)
+            // NEW: Only show tasks matching our current tab (Pending vs Completed)
+            filteredTasks = filteredTasks.filter(t => t.status === activeStatusFilter);
+            
             filteredTasks.sort((a, b) => {
                 const dateA = new Date(`${a.date}T${a.time}`);
                 const dateB = new Date(`${b.date}T${b.time}`);
                 return dateA - dateB;
             });
             
+            // Empty state handler
+            if (filteredTasks.length === 0) {
+                taskContainer.innerHTML = `<div class="col-12 text-center text-muted py-5"><p>No ${activeStatusFilter.toLowerCase()} tasks found here.</p></div>`;
+                return;
+            }
+
             filteredTasks.forEach(task => {
                 const statusColor = task.status === "Pending" ? "warning" : "success";
                 const priorityColor = task.priority === "High" ? "danger" : task.priority === "Medium" ? "primary" : "info";
                 
                 const dateTimeDisplay = new Date(`${task.date}T${task.time}`).toLocaleString([], {dateStyle: 'medium', timeStyle: 'short'});
                 const imgHtml = task.image ? `<img src="${task.image}" class="task-img" alt="Task Image">` : '';
+                
+                // If it's completed, show a disabled grey button to look clean in the history tab
+                const markDoneBtn = task.status === "Pending" 
+                    ? `<button class="btn btn-sm btn-outline-success mt-3 w-100 fw-bold" onclick="markAsDone('${task.id}', event)">✔ Mark as Done</button>` 
+                    : `<button class="btn btn-sm btn-secondary mt-3 w-100 fw-bold" disabled>Completed</button>`;
 
                 const cardHtml = `
                     <div class="col-md-6 col-lg-4">
-                        <div class="card custom-card hover-anim h-100" onclick="openTaskModal(${task.id})">
+                        <div class="card custom-card hover-anim h-100" onclick="openTaskModal('${task.id}')">
                             ${imgHtml}
                             <div class="card-body task-card-body">
                                 <h5 class="card-title fw-bold">${task.title}</h5>
@@ -221,6 +337,7 @@ document.addEventListener("DOMContentLoaded", () => {
                                 <div class="mt-auto">
                                     <span class="badge bg-${statusColor}">${task.status}</span>
                                     <span class="badge bg-${priorityColor}">${task.priority} Priority</span>
+                                    ${markDoneBtn}
                                 </div>
                             </div>
                         </div>
@@ -268,12 +385,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
 
-        // Initialize UI
-        renderCourseUI();
-        renderTasks();
-        renderCalendar();
-
-        // -- Open Details Modal --
+        // -- Modals & Forms --
         window.openTaskModal = function(id) {
             currentEditingId = id;
             const task = tasks.find(t => t.id == id);
@@ -296,7 +408,6 @@ document.addEventListener("DOMContentLoaded", () => {
             detailsModal.show();
         };
 
-        // -- Open Add Task Form --
         document.getElementById('btnOpenAddTask').addEventListener('click', () => {
             document.getElementById('taskForm').reset();
             document.getElementById('taskIdInput').value = ""; 
@@ -306,7 +417,6 @@ document.addEventListener("DOMContentLoaded", () => {
             formModal.show();
         });
 
-        // -- Open Edit Task Form --
         document.getElementById('btnEditTask').addEventListener('click', () => {
             detailsModal.hide();
             const task = tasks.find(t => t.id == currentEditingId);
@@ -329,7 +439,6 @@ document.addEventListener("DOMContentLoaded", () => {
             formModal.show();
         });
 
-        // -- Save Task (ASYNC Handle Supabase Upload & Sync Views) --
         document.getElementById('taskForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
@@ -364,8 +473,9 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             const idInput = document.getElementById('taskIdInput').value;
-            const newTask = {
-                id: idInput ? parseInt(idInput) : Date.now(), 
+            const { data: { user } } = await supabase.auth.getUser();
+            const taskData = {
+                user_id: user.id,
                 title: document.getElementById('taskTitleInput').value,
                 course: document.getElementById('taskCourseInput').value,
                 date: document.getElementById('taskDateInput').value,
@@ -373,70 +483,91 @@ document.addEventListener("DOMContentLoaded", () => {
                 image: finalImageUrl, 
                 priority: document.getElementById('taskPriorityInput').value,
                 status: document.getElementById('taskStatusInput').value,
-                desc: document.getElementById('taskDescInput').value,
+                desc_text: document.getElementById('taskDescInput').value, 
             };
 
             if (idInput) {
-                const index = tasks.findIndex(t => t.id == parseInt(idInput));
-                tasks[index] = newTask;
+                await supabase.from('tasks').update(taskData).eq('id', idInput);
             } else {
-                tasks.push(newTask);
+                await supabase.from('tasks').insert([taskData]);
             }
 
             submitBtn.disabled = false;
             submitBtn.innerText = "Save Task";
             formModal.hide();
-            
-            // Sync BOTH views
-            const checkedCb = document.querySelector('.filter-cb:checked');
-            renderTasks(checkedCb ? checkedCb.value : "All");
-            renderCalendar();
+            await fetchAllData();
         });
 
-        // -- Delete Task (Sync Views) --
-        document.getElementById('btnDeleteTask').addEventListener('click', () => {
+        document.getElementById('btnDeleteTask').addEventListener('click', async () => { 
             if(confirm("Are you sure you want to delete this task?")) {
-                tasks = tasks.filter(t => t.id != currentEditingId);
+                await supabase.from('tasks').delete().eq('id', currentEditingId);
                 detailsModal.hide();
-                
-                // Sync BOTH views
-                const checkedCb = document.querySelector('.filter-cb:checked');
-                renderTasks(checkedCb ? checkedCb.value : "All");
-                renderCalendar();
+                await fetchAllData();
             }
         });
 
-        // -- View Toggling --
-        document.getElementById("btnCalView").addEventListener("click", () => {
-            document.getElementById("taskContainer").classList.add("d-none");
-            document.getElementById("calendarContainer").classList.remove("d-none");
-            document.getElementById("btnCalView").classList.add("active");
-            document.getElementById("btnListView").classList.remove("active");
-            
-            // Force Calendar to resize properly
-            setTimeout(() => calendarInstance.render(), 10);
-        });
+        // -- View Toggling (Updated with History) --
+        const btnListView = document.getElementById("btnListView");
+        const btnCalView = document.getElementById("btnCalView");
+        const btnHistoryView = document.getElementById("btnHistoryView"); // We will add this to tasks.html next
+        const calContainer = document.getElementById("calendarContainer");
 
-        document.getElementById("btnListView").addEventListener("click", () => {
-            document.getElementById("calendarContainer").classList.add("d-none");
-            document.getElementById("taskContainer").classList.remove("d-none");
-            document.getElementById("btnListView").classList.add("active");
-            document.getElementById("btnCalView").classList.remove("active");
-        });
+        if (btnListView) {
+            btnListView.addEventListener("click", () => {
+                calContainer.classList.add("d-none");
+                taskContainer.classList.remove("d-none");
+                
+                btnListView.classList.add("active");
+                btnCalView.classList.remove("active");
+                if (btnHistoryView) btnHistoryView.classList.remove("active");
+                
+                activeStatusFilter = "Pending";
+                const currentCourse = document.querySelector('.filter-cb:checked')?.value || "All";
+                renderTasks(currentCourse);
+            });
+        }
+
+        if (btnHistoryView) {
+            btnHistoryView.addEventListener("click", () => {
+                calContainer.classList.add("d-none");
+                taskContainer.classList.remove("d-none");
+                
+                btnHistoryView.classList.add("active");
+                btnListView.classList.remove("active");
+                btnCalView.classList.remove("active");
+                
+                activeStatusFilter = "Completed";
+                const currentCourse = document.querySelector('.filter-cb:checked')?.value || "All";
+                renderTasks(currentCourse);
+            });
+        }
+
+        if (btnCalView) {
+            btnCalView.addEventListener("click", () => {
+                taskContainer.classList.add("d-none");
+                calContainer.classList.remove("d-none");
+                
+                btnCalView.classList.add("active");
+                btnListView.classList.remove("active");
+                if (btnHistoryView) btnHistoryView.classList.remove("active");
+                
+                setTimeout(() => { if(calendarInstance) calendarInstance.render(); }, 10);
+            });
+        }
     }
 
-    // --- 3. CONTACT FORM VALIDATION ---
+// --- CONTACT FORM VALIDATION ---
     const contactForm = document.getElementById("contactForm");
     if (contactForm) {
         contactForm.addEventListener("submit", (e) => {
-            e.preventDefault();
             const message = document.getElementById("messageBox").value.trim();
+            
+            // Only block the form IF the message is too short
             if (message.length < 10) {
+                e.preventDefault(); // Stop submission
                 alert("Message is too short. Please provide more detail.");
-            } else {
-                alert("Message sent successfully! Our team will get back to you.");
-                contactForm.reset();
             }
+            // If it is 10 characters or more, the JS does nothing, 
+            // allowing the browser to send the form directly to FormSubmit
         });
     }
-});
