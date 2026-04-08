@@ -773,4 +773,24 @@ document.addEventListener("DOMContentLoaded", () => {
 } catch (err) {
     console.error("App Initialization Error:", err);
 }
+
+// --- 3. CONTACT FORM VALIDATION ---
+    const contactForm = document.getElementById("contactForm");
+    if (contactForm) {
+        contactForm.addEventListener("submit", (e) => {
+            const message = document.getElementById("messageBox").value.trim();
+            
+            // Only block the form IF the message is too short
+            if (message.length < 10) {
+                e.preventDefault(); // Stop submission
+                alert("Message is too short. Please provide more detail.");
+            }
+            // If it is 10 characters or more, the JS does nothing, 
+            // allowing the browser to send the form directly to FormSubmit!
+        });
+    }
+
 });
+
+
+
