@@ -1,64 +1,96 @@
 document.addEventListener("DOMContentLoaded", () => {
-
-    // ==========================================
-    // DARK/LIGHT MODE
-    // ==========================================
-
-    // Text label for light/dark mode toggle
+    try {
+    // --- 0. THEME TOGGLE LOGIC ---
     const modeToggle = document.getElementById("modeToggle");
     const toggleLabel = document.getElementById("toggleLabel");
     const htmlElement = document.documentElement;
 
-    // Apply theme changes
-    const applyTheme = (theme) => {
-        if (theme === "dark") {
-            htmlElement.setAttribute("data-bs-theme", "dark");
-            if (toggleLabel) toggleLabel.innerText = "Theme: Dark";
-            if (modeToggle) modeToggle.checked = true;
-        } else {
-            htmlElement.setAttribute("data-bs-theme", "light");
-            if (toggleLabel) toggleLabel.innerText = "Theme: Light";
-            if (modeToggle) modeToggle.checked = false;
+    function updateToggleText(theme) {
+        if (toggleLabel) {
+            toggleLabel.innerText = theme === "dark" ? "Dark Mode" : "Light Mode";
         }
-    };
+    }
 
-    // Apply theme from current selection
-    const savedTheme = localStorage.getItem("taskmaster-theme") || "light";
-    applyTheme(savedTheme);
-
+    const savedTheme = localStorage.getItem("theme") || localStorage.getItem("taskmaster-theme") || "light";
+    htmlElement.setAttribute("data-bs-theme", savedTheme);
     if (modeToggle) {
+        modeToggle.checked = savedTheme === "dark";
+        updateToggleText(savedTheme);
+        
         modeToggle.addEventListener("change", () => {
             const newTheme = modeToggle.checked ? "dark" : "light";
+            htmlElement.setAttribute("data-bs-theme", newTheme);
+            localStorage.setItem("theme", newTheme);
             localStorage.setItem("taskmaster-theme", newTheme);
-            applyTheme(newTheme);
+            updateToggleText(newTheme);
         });
     }
 
-    // ==========================================
-    // 🚀 INITIALIZE SUPABASE
-    // ==========================================
-    const SUPABASE_URL = 'https://pselhaneizlyxrjlwrdi.supabase.co'; 
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBzZWxoYW5laXpseXhyamx3cmRpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzMDIzMzQsImV4cCI6MjA5MDg3ODMzNH0.fY09eWmTfVDboPXWVhyMTxk4PbREAafognPfDjybsMA'; 
-    
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    // ⚙️ CONFIGURATION & UTILITIES
+    const CONFIG = {
+        SUPABASE: {
+            URL: 'https://pselhaneizlyxrjlwrdi.supabase.co',
+            ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBzZWxoYW5laXpseXhyamx3cmRpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzMDIzMzQsImV4cCI6MjA5MDg3ODMzNH0.fY09eWmTfVDboPXWVhyMTxk4PbREAafognPfDjybsMA'
+        },
+        EMAILJS: {
+            SERVICE_ID: "service_zq6e7ni",
+            TEMPLATE_ID: "template_tvecg8i",
+            PUBLIC_KEY: "vcyaE5fdJT8OJ6vw5",
+            TO_EMAIL: 'alfonso_chua@dlsu.edu.ph'
+        }
+    };
+
+    function sanitizeHTML(str) {
+        if (!str) return "";
+        const temp = document.createElement('div');
+        temp.textContent = str;
+        return temp.innerHTML;
+    }
+
+    let supabase = null;
+    if (window.supabase) {
+        supabase = window.supabase.createClient(CONFIG.SUPABASE.URL, CONFIG.SUPABASE.ANON_KEY);
+    } else {
+        console.error("Supabase SDK missing. Database features disabled.");
+    }
 
     // --- 1. LOGIN / REGISTER LOGIC ---
     const loginForm = document.getElementById("loginForm");
     const registerForm = document.getElementById("registerForm");
 
     if (loginForm && registerForm) {
+        // Initial animation for auth card
+        if (window.motion) {
+            motion.animate("#authCard", { opacity: [0, 1], y: [20, 0] }, { duration: 0.6, easing: "ease-out" });
+        }
         
         // Toggle between Login and Register views
         document.getElementById("showRegister").addEventListener("click", (e) => {
             e.preventDefault();
-            loginForm.classList.add("d-none");
-            registerForm.classList.remove("d-none");
+            if (window.motion) {
+                motion.animate("#loginForm", { opacity: 0, x: -20 }, { duration: 0.3 }).finished.then(() => {
+                    loginForm.classList.add("d-none");
+                    registerForm.classList.remove("d-none");
+                    motion.animate("#registerForm", { opacity: [0, 1], x: [20, 0] }, { duration: 0.3 });
+                });
+            } else {
+                loginForm.classList.add("d-none");
+                registerForm.classList.remove("d-none");
+            }
         });
         
         document.getElementById("showLogin").addEventListener("click", (e) => {
             e.preventDefault();
-            registerForm.classList.add("d-none");
-            loginForm.classList.remove("d-none");
+            if (window.motion) {
+                motion.animate("#registerForm", { opacity: 0, x: 20 }, { duration: 0.3 }).finished.then(() => {
+                    registerForm.classList.add("d-none");
+                    loginForm.classList.remove("d-none");
+                    motion.animate("#loginForm", { opacity: [0, 1], x: [-20, 0] }, { duration: 0.3 });
+                });
+            } else {
+                registerForm.classList.add("d-none");
+                loginForm.classList.remove("d-none");
+            }
         });
 
         // Handle REAL Registration
@@ -70,7 +102,8 @@ document.addEventListener("DOMContentLoaded", () => {
             
             const regBtn = document.getElementById("regBtn");
             regBtn.disabled = true;
-            regBtn.innerText = "Creating account...";
+            regBtn.innerHTML = `<span>Creating account...</span> <i data-lucide="loader" class="spin"></i>`;
+            if (window.lucide) lucide.createIcons();
 
             const { data, error } = await supabase.auth.signUp({
                 email: email,
@@ -85,9 +118,9 @@ document.addEventListener("DOMContentLoaded", () => {
             if (error) {
                 alert("Registration failed: " + error.message);
                 regBtn.disabled = false;
-                regBtn.innerText = "Register";
+                regBtn.innerHTML = `<span>Create Account</span> <i data-lucide="user-plus" size="18"></i>`;
+                if (window.lucide) lucide.createIcons();
             } else {
-                alert("Account created successfully!");
                 window.location.href = "dashboard.html";
             }
         });
@@ -100,7 +133,8 @@ document.addEventListener("DOMContentLoaded", () => {
             
             const loginBtn = document.getElementById("loginBtn");
             loginBtn.disabled = true;
-            loginBtn.innerText = "Signing in...";
+            loginBtn.innerHTML = `<span>Signing in...</span> <i data-lucide="loader" class="spin"></i>`;
+            if (window.lucide) lucide.createIcons();
 
             const { data, error } = await supabase.auth.signInWithPassword({
                 email: email,
@@ -110,7 +144,8 @@ document.addEventListener("DOMContentLoaded", () => {
             if (error) {
                 alert("Login failed: " + error.message);
                 loginBtn.disabled = false;
-                loginBtn.innerText = "Login";
+                loginBtn.innerHTML = `<span>Sign In</span> <i data-lucide="arrow-right" size="18"></i>`;
+                if (window.lucide) lucide.createIcons();
             } else {
                 window.location.href = "dashboard.html";
             }
@@ -122,8 +157,15 @@ document.addEventListener("DOMContentLoaded", () => {
     let tasks = [];
 
     async function fetchAllData() {
+        if (!supabase) return;
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
+
+        // Display user name if on dashboard
+        const userNameDisplay = document.getElementById("userNameDisplay");
+        if (userNameDisplay && user.user_metadata?.full_name) {
+            userNameDisplay.innerText = user.user_metadata.full_name;
+        }
 
         // Fetch Courses from Supabase
         const { data: cData } = await supabase.from('courses').select('*').eq('user_id', user.id);
@@ -152,6 +194,66 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         
         updateAnalytics();
+        populateDashboard();
+    }
+
+    // === Dashboard Populator ===
+    function populateDashboard() {
+        if (!document.getElementById("dashTotalTasks")) return;
+
+        const pendingTasks = tasks.filter(t => t.status === "Pending");
+        const today = new Date().toISOString().split('T')[0];
+        const dueToday = pendingTasks.filter(t => t.date === today);
+        const completedTasks = tasks.filter(t => t.status === "Completed");
+        const completionRate = tasks.length === 0 ? 0 : Math.round((completedTasks.length / tasks.length) * 100);
+
+        document.getElementById("dashTotalTasks").innerText = pendingTasks.length;
+        document.getElementById("dashDueToday").innerText = dueToday.length;
+        document.getElementById("dashCompletionRate").innerText = completionRate;
+        document.getElementById("dashProgressBar").style.width = `${completionRate}%`;
+        document.getElementById("dashStreak").innerText = completedTasks.length > 0 ? Math.min(completedTasks.length, 7) : 0;
+
+        // Render Priority Tasks (max 3)
+        const priorityContainer = document.getElementById("priorityTasksContainer");
+        if (priorityContainer) {
+            const highPriority = pendingTasks
+                .filter(t => t.priority === "High")
+                .sort((a, b) => new Date(a.date) - new Date(b.date))
+                .slice(0, 3);
+
+            if (highPriority.length > 0) {
+                priorityContainer.innerHTML = "";
+                highPriority.forEach((task, index) => {
+                    const cardHtml = `
+                        <div class="col-12">
+                            <div class="custom-card p-3 d-flex align-items-center justify-content-between" style="border-left: 4px solid var(--accent-blue);">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="p-2 bg-primary-subtle text-primary rounded-3">
+                                        <i data-lucide="alert-circle" size="20"></i>
+                                    </div>
+                                    <div>
+                                        <h6 class="fw-bold m-0">${sanitizeHTML(task.title)}</h6>
+                                        <div class="small text-secondary">${sanitizeHTML(task.course)} • Due ${new Date(task.date).toLocaleDateString()}</div>
+                                    </div>
+                                </div>
+                                <button class="btn btn-sm btn-primary px-3" onclick="markAsDone('${task.id}', event)">Done</button>
+                            </div>
+                        </div>
+                    `;
+                    priorityContainer.insertAdjacentHTML('beforeend', cardHtml);
+                });
+                if (window.lucide) lucide.createIcons();
+                // Animation
+                if (window.motion) {
+                    motion.animate("#priorityTasksContainer > div", { opacity: [0, 1], y: [10, 0] }, { delay: motion.stagger(0.1) });
+                }
+            }
+        }
+
+        // Summary Card Animations
+        if (window.motion) {
+            motion.animate("#totalTasksCard, #dueTodayCard, #completionCard", { opacity: [0, 1], scale: [0.95, 1] }, { delay: motion.stagger(0.1), duration: 0.5 });
+        }
     }
 
     // === Analytics Calculator ===
@@ -174,11 +276,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const activeStreak = completedTasks > 0 ? Math.min(completedTasks, 7) : 0; 
         streakEl.innerText = activeStreak;
+
+        if (window.motion) {
+            motion.animate("#analyticsProgress", { width: ["0%", `${completionRate}%`] }, { duration: 1, easing: "ease-out" });
+        }
     }
 
     // === Mark as Done Function ===
     window.markAsDone = async function(id, event) {
-        event.stopPropagation(); 
+        if (event) event.stopPropagation(); 
         
         const { error } = await supabase.from('tasks').update({ status: 'Completed' }).eq('id', id);
         
@@ -189,7 +295,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
-    fetchAllData();
+    if (supabase) {
+        fetchAllData();
+    }
 
     // --- 3. TASK MANAGER UI LOGIC ---
     if (document.getElementById("taskContainer")) {
@@ -212,22 +320,28 @@ document.addEventListener("DOMContentLoaded", () => {
             const currentChecked = checkedCb ? checkedCb.value : "All";
             
             filterContainer.innerHTML = `
-                <li class="list-group-item d-flex justify-content-between align-items-center">
-                    <div>
-                        <input class="form-check-input filter-cb" type="checkbox" value="All" ${currentChecked === "All" ? "checked" : ""}> All
+                <li class="list-group-item d-flex justify-content-between align-items-center bg-transparent border-0 px-0 mb-2">
+                    <div class="form-check w-100">
+                        <input class="form-check-input filter-cb" type="checkbox" value="All" id="courseAll" ${currentChecked === "All" ? "checked" : ""}>
+                        <label class="form-check-label fw-medium stretched-link" for="courseAll">All Courses</label>
                     </div>
                 </li>`;
             
             courses.forEach(course => {
                 const isChecked = currentChecked === course ? "checked" : "";
                 filterContainer.innerHTML += `
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                        <div>
-                            <input class="form-check-input filter-cb" type="checkbox" value="${course}" ${isChecked}> ${course}
+                    <li class="list-group-item d-flex justify-content-between align-items-center bg-transparent border-0 px-0 mb-2">
+                        <div class="form-check flex-grow-1">
+                            <input class="form-check-input filter-cb" type="checkbox" value="${sanitizeHTML(course)}" id="course-${course}" ${isChecked}>
+                            <label class="form-check-label fw-medium stretched-link" for="course-${course}">${sanitizeHTML(course)}</label>
                         </div>
-                        <button class="btn btn-sm btn-outline-danger border-0 py-0 px-2" onclick="deleteCourse('${course}', event)" title="Delete Course">×</button>
+                        <button class="btn btn-sm text-danger opacity-50 hover-opacity-100 border-0 p-0" onclick="deleteCourse('${course}', event)" title="Delete Course" style="position: relative; z-index: 2;">
+                            <i data-lucide="x-circle" size="16"></i>
+                        </button>
                     </li>`;
             });
+
+            if (window.lucide) lucide.createIcons();
 
             const checkboxes = document.querySelectorAll('.filter-cb');
             checkboxes.forEach(cb => {
@@ -240,7 +354,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             selectContainer.innerHTML = "";
             courses.forEach(course => {
-                selectContainer.innerHTML += `<option value="${course}">${course}</option>`;
+                selectContainer.innerHTML += `<option value="${sanitizeHTML(course)}">${sanitizeHTML(course)}</option>`;
             });
             selectContainer.innerHTML += `<option value="__ADD_NEW__" class="text-success fw-bold">+ Add New Course</option>`;
         }
@@ -248,16 +362,47 @@ document.addEventListener("DOMContentLoaded", () => {
         // -- Delete / Add Courses --
         window.deleteCourse = async function(courseName, event) { 
             event.stopPropagation();
-            if(confirm(`Are you sure you want to delete the course "${courseName}"?`)) {
-                const { error } = await supabase.from('courses').delete().eq('course_name', courseName);
-                if (!error) {
-                    await fetchAllData();
-                    const checkedCb = document.querySelector('.filter-cb:checked');
-                    if(!checkedCb) {
-                        const allBtn = document.querySelector('input[value="All"]');
-                        if (allBtn) allBtn.checked = true;
-                        renderTasks("All");
+            if(confirm(`CASCADE DELETE: Are you sure you want to delete the course "${courseName}" and ALL tasks associated with it?`)) {
+                try {
+                    const { data: { user } } = await supabase.auth.getUser();
+                    if (!user) throw new Error("User not authenticated");
+
+                    // Delete tasks associated with the course first (explicitly using user_id for RLS)
+                    const { error: taskError } = await supabase
+                        .from('tasks')
+                        .delete()
+                        .eq('course', courseName)
+                        .eq('user_id', user.id);
+                    
+                    if (taskError) {
+                        console.error("Supabase Task Delete Error:", taskError);
+                        alert(`Error deleting tasks: ${taskError.message}`);
+                        return;
                     }
+
+                    // Now delete the course itself
+                    const { error: courseError } = await supabase
+                        .from('courses')
+                        .delete()
+                        .eq('course_name', courseName)
+                        .eq('user_id', user.id);
+                    
+                    if (!courseError) {
+                        await fetchAllData();
+                        
+                        const checkedCb = document.querySelector('.filter-cb:checked');
+                        if(!checkedCb) {
+                            const allBtn = document.querySelector('input[value="All"]');
+                            if (allBtn) allBtn.checked = true;
+                            renderTasks("All");
+                        }
+                    } else {
+                        console.error("Supabase Course Delete Error:", courseError);
+                        alert(`Error deleting course: ${courseError.message}`);
+                    }
+                } catch (err) {
+                    console.error("Unexpected Deletion Error:", err);
+                    alert("An unexpected error occurred during deletion.");
                 }
             }
         };
@@ -294,7 +439,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
 
-        // -- Render Tasks (Updated with History Filter) --
+        // -- Render Tasks --
         window.renderTasks = function(filter = "All") {
             taskContainer.innerHTML = "";
             let filteredTasks = filter === "All" ? tasks : tasks.filter(t => t.course === filter);
@@ -310,7 +455,7 @@ document.addEventListener("DOMContentLoaded", () => {
             
             // Empty state handler
             if (filteredTasks.length === 0) {
-                taskContainer.innerHTML = `<div class="col-12 text-center text-muted py-5"><p>No ${activeStatusFilter.toLowerCase()} tasks found here.</p></div>`;
+                taskContainer.innerHTML = `<div class="col-12 text-center text-secondary py-5 border rounded-4 border-dashed"><p class="m-0">No ${sanitizeHTML(activeStatusFilter.toLowerCase())} tasks found.</p></div>`;
                 return;
             }
 
@@ -321,22 +466,25 @@ document.addEventListener("DOMContentLoaded", () => {
                 const dateTimeDisplay = new Date(`${task.date}T${task.time}`).toLocaleString([], {dateStyle: 'medium', timeStyle: 'short'});
                 const imgHtml = task.image ? `<img src="${task.image}" class="task-img" alt="Task Image">` : '';
                 
-                // If it's completed, show a disabled grey button to look clean in the history tab
                 const markDoneBtn = task.status === "Pending" 
-                    ? `<button class="btn btn-sm btn-outline-success mt-3 w-100 fw-bold" onclick="markAsDone('${task.id}', event)">✔ Mark as Done</button>` 
-                    : `<button class="btn btn-sm btn-secondary mt-3 w-100 fw-bold" disabled>Completed</button>`;
+                    ? `<button class="btn btn-sm btn-outline-success mt-3 w-100 fw-bold d-flex align-items-center justify-content-center gap-2" onclick="markAsDone('${task.id}', event)"><i data-lucide="check" size="16"></i> Done</button>` 
+                    : `<button class="btn btn-sm btn-secondary mt-3 w-100 fw-bold opacity-75 border-0" disabled><i data-lucide="check-circle-2" size="16"></i> Completed</button>`;
 
                 const cardHtml = `
-                    <div class="col-md-6 col-lg-4">
-                        <div class="card custom-card hover-anim h-100" onclick="openTaskModal('${task.id}')">
+                    <div class="col-md-6 col-xl-4 task-item-wrapper">
+                        <div class="custom-card h-100" onclick="openTaskModal('${task.id}')">
                             ${imgHtml}
-                            <div class="card-body task-card-body">
-                                <h5 class="card-title fw-bold">${task.title}</h5>
-                                <h6 class="card-subtitle mb-1 text-muted">${task.course}</h6>
-                                <div class="task-meta">📅 ${dateTimeDisplay}</div>
+                            <div class="card-body p-4 d-flex flex-column">
+                                <span class="badge bg-primary-subtle text-primary text-uppercase mb-2" style="width: fit-content; font-size: 0.65rem;">${sanitizeHTML(task.course)}</span>
+                                <h5 class="fw-bold mb-3">${sanitizeHTML(task.title)}</h5>
+                                <div class="d-flex align-items-center gap-2 text-secondary small mb-4">
+                                    <i data-lucide="calendar" size="14"></i>
+                                    <span>${dateTimeDisplay}</span>
+                                </div>
                                 <div class="mt-auto">
-                                    <span class="badge bg-${statusColor}">${task.status}</span>
-                                    <span class="badge bg-${priorityColor}">${task.priority} Priority</span>
+                                    <div class="d-flex gap-2">
+                                        <span class="badge bg-${priorityColor} px-2 py-1" style="font-size: 0.7rem;">${sanitizeHTML(task.priority)}</span>
+                                    </div>
                                     ${markDoneBtn}
                                 </div>
                             </div>
@@ -345,15 +493,23 @@ document.addEventListener("DOMContentLoaded", () => {
                 `;
                 taskContainer.insertAdjacentHTML('beforeend', cardHtml);
             });
+
+            if (window.lucide) lucide.createIcons();
+            
+            // Animation for task list
+            if (window.motion) {
+                motion.animate(".task-item-wrapper", { opacity: [0, 1], y: [20, 0] }, { delay: motion.stagger(0.05), duration: 0.4 });
+            }
         }
 
         // -- Render Calendar View --
         function renderCalendar() {
             const calendarEl = document.getElementById('calendar');
+            if (!calendarEl) return;
             
             const calendarEvents = tasks.map(task => {
-                let color = task.priority === "High" ? "#dc3545" : task.priority === "Medium" ? "#0d6efd" : "#0dcaf0";
-                if (task.status === "Completed") color = "#198754"; 
+                let color = task.priority === "High" ? "#ef4444" : task.priority === "Medium" ? "#0d6efd" : "#06b6d4";
+                if (task.status === "Completed") color = "#10b981"; 
 
                 return {
                     id: task.id,
@@ -369,12 +525,35 @@ document.addEventListener("DOMContentLoaded", () => {
                 calendarInstance.removeAllEvents();
                 calendarInstance.addEventSource(calendarEvents);
             } else {
+                const isMobile = window.innerWidth < 768;
                 calendarInstance = new FullCalendar.Calendar(calendarEl, {
-                    initialView: 'dayGridMonth',
-                    headerToolbar: {
+                    initialView: isMobile ? 'timeGridDay' : 'dayGridMonth',
+                    headerToolbar: isMobile ? {
+                        left: 'prev,next',
+                        center: 'title',
+                        right: 'dayGridMonth,timeGridDay'
+                    } : {
                         left: 'prev,next today',
                         center: 'title',
                         right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                    },
+                    height: 'auto',
+                    defaultTimedEventDuration: '00:00:00',
+                    displayEventEnd: false,
+                    eventTimeFormat: {
+                      hour: 'numeric',
+                      minute: '2-digit',
+                      meridiem: 'short'
+                    },
+                    eventContent: function(arg) {
+                      let timeText = arg.timeText.toUpperCase();
+                      return {
+                        html: `<div class="fc-event-main-frame d-flex align-items-center gap-1" style="overflow: hidden; white-space: nowrap;">
+                                <div class="fc-daygrid-event-dot" style="border-color: ${arg.borderColor}"></div>
+                                <div class="fc-event-title fw-bold" style="font-size: 0.75rem;">${sanitizeHTML(arg.event.title)}</div>
+                                <div class="fc-event-time text-secondary opacity-75" style="font-size: 0.7rem;">${timeText}</div>
+                              </div>`
+                      };
                     },
                     events: calendarEvents,
                     eventClick: function(info) {
@@ -393,7 +572,7 @@ document.addEventListener("DOMContentLoaded", () => {
             document.getElementById('modalTitle').innerText = task.title;
             document.getElementById('modalCourse').innerText = task.course;
             document.getElementById('modalDateTime').innerText = new Date(`${task.date}T${task.time}`).toLocaleString([], {dateStyle: 'full', timeStyle: 'short'});
-            document.getElementById('modalDesc').innerText = task.desc;
+            document.getElementById('modalDesc').innerText = task.desc || "No description provided.";
             document.getElementById('modalPriority').innerText = task.priority;
             document.getElementById('modalStatus').innerText = task.status;
             
@@ -406,6 +585,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             detailsModal.show();
+            if (window.lucide) lucide.createIcons();
         };
 
         document.getElementById('btnOpenAddTask').addEventListener('click', () => {
@@ -426,7 +606,7 @@ document.addEventListener("DOMContentLoaded", () => {
             document.getElementById('taskCourseInput').value = task.course;
             document.getElementById('taskDateInput').value = task.date;
             document.getElementById('taskTimeInput').value = task.time;
-            
+
             document.getElementById('existingImageURL').value = task.image || "";
             document.getElementById('imageHelperText').innerText = task.image ? "Leave empty to keep existing image." : "";
             document.getElementById('taskImageInput').value = ""; 
@@ -444,7 +624,7 @@ document.addEventListener("DOMContentLoaded", () => {
             
             const submitBtn = document.getElementById('btnSaveTask');
             submitBtn.disabled = true;
-            submitBtn.innerText = "Uploading & Saving...";
+            submitBtn.innerText = "Saving...";
 
             let finalImageUrl = document.getElementById('existingImageURL').value;
             const imageFile = document.getElementById('taskImageInput').files[0];
@@ -506,59 +686,91 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
 
-        // -- View Toggling (Updated with History) --
+        // -- View Toggling --
         const btnListView = document.getElementById("btnListView");
         const btnCalView = document.getElementById("btnCalView");
-        const btnHistoryView = document.getElementById("btnHistoryView"); // We will add this to tasks.html next
+        const btnHistoryView = document.getElementById("btnHistoryView"); 
         const calContainer = document.getElementById("calendarContainer");
+
+        const updateTabUI = (activeBtn) => {
+            [btnListView, btnCalView, btnHistoryView].forEach(btn => btn?.classList.remove("active", "btn-primary"));
+            [btnListView, btnCalView, btnHistoryView].forEach(btn => btn?.classList.add("btn-outline-primary"));
+            activeBtn.classList.remove("btn-outline-primary");
+            activeBtn.classList.add("active", "btn-primary");
+        };
 
         if (btnListView) {
             btnListView.addEventListener("click", () => {
                 calContainer.classList.add("d-none");
                 taskContainer.classList.remove("d-none");
-                
-                btnListView.classList.add("active");
-                btnCalView.classList.remove("active");
-                if (btnHistoryView) btnHistoryView.classList.remove("active");
-                
+                updateTabUI(btnListView);
                 activeStatusFilter = "Pending";
                 const currentCourse = document.querySelector('.filter-cb:checked')?.value || "All";
                 renderTasks(currentCourse);
             });
         }
 
-        // -- View Toggling --
-        document.getElementById("btnCalView").addEventListener("click", () => {
-            document.getElementById("taskContainer").classList.add("d-none");
-            document.getElementById("calendarContainer").classList.remove("d-none");
-            document.getElementById("btnCalView").classList.add("active");
-            document.getElementById("btnListView").classList.remove("active");
-            
-            // Force Calendar to resize properly
-            setTimeout(() => calendarInstance.render(), 10);
-        });
+        if (btnHistoryView) {
+            btnHistoryView.addEventListener("click", () => {
+                calContainer.classList.add("d-none");
+                taskContainer.classList.remove("d-none");
+                updateTabUI(btnHistoryView);
+                activeStatusFilter = "Completed";
+                const currentCourse = document.querySelector('.filter-cb:checked')?.value || "All";
+                renderTasks(currentCourse);
+            });
+        }
 
-        document.getElementById("btnListView").addEventListener("click", () => {
-            document.getElementById("calendarContainer").classList.add("d-none");
-            document.getElementById("taskContainer").classList.remove("d-none");
-            document.getElementById("btnListView").classList.add("active");
-            document.getElementById("btnCalView").classList.remove("active");
-        });
+        if (btnCalView) {
+            btnCalView.addEventListener("click", () => {
+                taskContainer.classList.add("d-none");
+                calContainer.classList.remove("d-none");
+                updateTabUI(btnCalView);
+                setTimeout(() => { if(calendarInstance) calendarInstance.render(); }, 10);
+            });
+        }
     }
 
-    // --- 3. CONTACT FORM VALIDATION ---
+    // --- 4. CONTACT FORM VALIDATION ---
     const contactForm = document.getElementById("contactForm");
     if (contactForm) {
-        contactForm.addEventListener("submit", (e) => {
-            const message = document.getElementById("messageBox").value.trim();
+        contactForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
             
-            // Only block the form IF the message is too short
+            const submitBtn = contactForm.querySelector('button[type="submit"]');
+            const name = contactForm.querySelector('input[placeholder="John Doe"]').value;
+            const message = document.getElementById("messageBox").value.trim();
+
             if (message.length < 10) {
-                e.preventDefault(); // Stop submission
                 alert("Message is too short. Please provide more detail.");
+                return;
             }
-            // If it is 10 characters or more, the JS does nothing, 
-            // allowing the browser to send the form directly to FormSubmit
+
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `<span>Sending...</span> <i data-lucide="loader" class="spin"></i>`;
+            if (window.lucide) lucide.createIcons();
+
+            try {
+                emailjs.init(CONFIG.EMAILJS.PUBLIC_KEY);
+                const templateParams = { 
+                    from_name: name, 
+                    message: message, 
+                    to_email: CONFIG.EMAILJS.TO_EMAIL 
+                };
+                await emailjs.send(CONFIG.EMAILJS.SERVICE_ID, CONFIG.EMAILJS.TEMPLATE_ID, templateParams);
+                alert("Message sent successfully! Our team will get back to you.");
+                contactForm.reset();
+            } catch (error) {
+                console.error("EmailJS Error:", error);
+                alert("Failed to send message. Please try again later.");
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = `<span>Send Message</span> <i data-lucide="send" size="18"></i>`;
+                if (window.lucide) lucide.createIcons();
+            }
         });
     }
+} catch (err) {
+    console.error("App Initialization Error:", err);
+}
 });
