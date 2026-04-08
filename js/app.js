@@ -561,3 +561,4 @@ document.addEventListener("DOMContentLoaded", () => {
             // allowing the browser to send the form directly to FormSubmit
         });
     }
+});
