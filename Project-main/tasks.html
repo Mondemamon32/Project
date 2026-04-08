@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaskMaster - My Tasks</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href='https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css' rel='stylesheet' />
+    <!-- Motion -->
+    <script src="https://unpkg.com/motion@latest/dist/motion.js"></script>
+    <script>
+        (function () {
+            const savedTheme = localStorage.getItem("theme") || "light";
+            document.documentElement.setAttribute("data-bs-theme", savedTheme);
+        })();
+    </script>
+</head>
+
+<body>
+    <nav class="navbar navbar-expand-lg sticky-top glass-effect">
+        <div class="container">
+            <a class="navbar-brand d-flex align-items-center gap-2" href="dashboard.html">
+                <i data-lucide="check-square" class="text-primary"></i>
+                <span>TaskMaster</span>
+            </a>
+            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <i data-lucide="menu"></i>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto gap-2">
+                    <li class="nav-item"><a class="nav-link" href="dashboard.html">Overview</a></li>
+                    <li class="nav-item"><a class="nav-link active" href="tasks.html">My Tasks</a></li>
+                    <li class="nav-item"><a class="nav-link" href="analytics.html">Analytics</a></li>
+                    <li class="nav-item"><a class="nav-link" href="about.html">About</a></li>
+                    <li class="nav-item ms-lg-3">
+                        <a class="btn btn-outline-danger btn-sm d-flex align-items-center gap-2 px-3" href="index.html"
+                            id="logoutBtn">
+                            <i data-lucide="log-out" size="16"></i>
+                            <span>Logout</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <header class="section-padding hero-header">
+        <div class="container">
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-4">
+                <div>
+                    <h1 class="hero-title mb-1">My Tasks</h1>
+                    <p class="text-secondary lead m-0">Organize and track your academic workload.</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary d-flex align-items-center gap-2 px-4 shadow-sm" id="btnOpenAddTask">
+                        <i data-lucide="plus" size="18"></i>
+                        <span>New Task</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mb-5">
+        <div class="row g-4">
+            <!-- Sidebar / Filters -->
+            <div class="col-lg-3">
+                <div class="custom-card p-4 sticky-top" style="top: 100px; z-index: 10;">
+                    <h5 class="fw-bold mb-4 d-flex align-items-center gap-2">
+                        <i data-lucide="filter" size="18" class="text-primary"></i>
+                        <span>Courses</span>
+                    </h5>
+                    <ul class="list-group list-group-flush" id="courseFilters">
+                        <!-- Courses will be injected here -->
+                    </ul>
+                    <form id="addCourseForm" class="mt-4 pt-4 border-top">
+                        <div class="input-group input-group-sm">
+                            <input type="text" id="newCourseInput" class="form-control" placeholder="New Course..."
+                                required>
+                            <button class="btn btn-outline-primary" type="submit">
+                                <i data-lucide="plus" size="14"></i>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Task List Area -->
+            <div class="col-lg-9">
+                <div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
+                    <div class="nav nav-pills gap-2" id="taskViewTabs">
+                        <button class="btn btn-sm px-3 active" id="btnListView">
+                            <i data-lucide="list" size="16" class="me-1"></i> List
+                        </button>
+                        <button class="btn btn-sm px-3" id="btnCalView">
+                            <i data-lucide="calendar" size="16" class="me-1"></i> Calendar
+                        </button>
+                        <button class="btn btn-sm px-3" id="btnHistoryView">
+                            <i data-lucide="history" size="16" class="me-1"></i> History
+                        </button>
+                    </div>
+                </div>
+
+                <!-- List View Container -->
+                <div id="taskContainer" class="row g-4">
+                    <!-- Tasks injected via app.js -->
+                </div>
+
+                <!-- Calendar View Container -->
+                <div id="calendarContainer" class="d-none">
+                    <div class="custom-card p-4">
+                        <div id="calendar"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Task Details Modal -->
+    <div class="modal fade" id="taskModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content border-0 rounded-4 overflow-hidden shadow-lg">
+                <div class="modal-header border-0 pb-0">
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4 p-md-5 pt-0 text-center">
+                    <div id="modalImageContainer" class="mb-4">
+                        <img src="" id="modalImage" class="img-fluid rounded-4 shadow-sm d-none"
+                            style="max-height: 300px; width: 100%; object-fit: cover;">
+                    </div>
+                    <div class="mb-2">
+                        <span class="badge bg-primary-subtle text-primary text-uppercase px-3 py-2"
+                            id="modalCourse">COURSE NAME</span>
+                    </div>
+                    <h2 class="fw-bold mb-3" id="modalTitle">Task Title</h2>
+                    <div class="d-flex justify-content-center gap-3 mb-4 text-secondary small">
+                        <span class="d-flex align-items-center gap-1"><i data-lucide="calendar" size="14"></i> <span
+                                id="modalDateTime">Date</span></span>
+                        <span class="d-flex align-items-center gap-1"><i data-lucide="flag" size="14"></i> <span
+                                id="modalPriority">Priority</span> Priority</span>
+                        <span class="d-flex align-items-center gap-1"><i data-lucide="tag" size="14"></i> <span
+                                id="modalStatus">Status</span></span>
+                    </div>
+                    <p class="text-secondary lead mb-5 px-md-5" id="modalDesc">No description available.</p>
+                    <div class="d-flex flex-wrap justify-content-center gap-2 pt-4 border-top">
+                        <button class="btn btn-outline-primary px-4 d-flex align-items-center gap-2" id="btnEditTask">
+                            <i data-lucide="edit-3" size="18"></i> Edit Task
+                        </button>
+                        <button class="btn btn-outline-danger px-4 d-flex align-items-center gap-2" id="btnDeleteTask">
+                            <i data-lucide="trash-2" size="18"></i> Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Task Form Modal -->
+    <div class="modal fade" id="taskFormModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 rounded-4 shadow-lg">
+                <div class="modal-header p-4 border-bottom-0 pb-0">
+                    <h4 class="modal-title fw-bold" id="formModalTitle">Add New Task</h4>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4 pt-2">
+                    <form id="taskForm">
+                        <input type="hidden" id="taskIdInput">
+                        <input type="hidden" id="existingImageURL">
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold text-secondary text-uppercase">Task Title</label>
+                            <input type="text" class="form-control" id="taskTitleInput" placeholder="Assignment Name..."
+                                required>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold text-secondary text-uppercase">Course</label>
+                                <select class="form-select" id="taskCourseInput" required></select>
+                            </div>
+                            <div class="col-md-6">
+                                <label
+                                    class="form-label small fw-semibold text-secondary text-uppercase">Priority</label>
+                                <select class="form-select" id="taskPriorityInput">
+                                    <option value="Low">Low</option>
+                                    <option value="Medium" selected>Medium</option>
+                                    <option value="High">High</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold text-secondary text-uppercase">Due
+                                    Date</label>
+                                <input type="date" class="form-control" id="taskDateInput" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold text-secondary text-uppercase">Time</label>
+                                <input type="time" class="form-control" id="taskTimeInput" required>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-semibold text-secondary text-uppercase">Status</label>
+                            <select class="form-select" id="taskStatusInput">
+                                <option value="Pending">Pending</option>
+                                <option value="Completed">Completed</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label
+                                class="form-label small fw-semibold text-secondary text-uppercase">Description</label>
+                            <textarea class="form-control" id="taskDescInput" rows="3"
+                                placeholder="Notes, details, etc."></textarea>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label small fw-semibold text-secondary text-uppercase">Attachment
+                                (Optional)</label>
+                            <input type="file" class="form-control" id="taskImageInput" accept="image/*">
+                            <div id="imageHelperText" class="form-text small"></div>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100 py-2 fw-bold" id="btnSaveTask">Save
+                            Task</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-md-6 text-center text-md-start">
+                    <div class="d-flex align-items-center gap-2 justify-content-center justify-content-md-start mb-2">
+                        <i data-lucide="check-square" class="text-primary" size="24"></i>
+                        <h5 class="fw-bold m-0">TaskMaster</h5>
+                    </div>
+                    <p class="text-secondary footer-details mb-0">
+                        Raymond Bool, Pamela Calma, Alfonso Chua, Norman Gopico <br>
+                        Built A.Y. 2025-2026
+                    </p>
+                </div>
+                <div class="col-md-6 text-center text-md-end mt-4 mt-md-0">
+                    <div class="d-flex justify-content-center justify-content-md-end align-items-center gap-4">
+                        <div class="form-check form-switch p-0 m-0">
+                            <input class="form-check-input ms-0" type="checkbox" id="modeToggle">
+                            <label class="form-check-label small text-secondary ms-2" for="modeToggle"
+                                id="toggleLabel">Light Mode</label>
+                        </div>
+                        <a href="https://github.com/Mondemamon32/Project" target="_blank" class="text-secondary">
+                            <i data-lucide="github" size="20"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js'></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/app.js"></script>
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>
